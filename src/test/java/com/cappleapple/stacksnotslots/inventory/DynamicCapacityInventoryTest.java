@@ -248,4 +248,19 @@ class DynamicCapacityInventoryTest {
         assertEquals(5, inventory.usedCapacity());
         assertTrue(inventory.validate());
     }
+
+    @Test
+    void browserTransferUsesOnlyBackendAndOnlyTheMainGrid() {
+        DynamicCapacityInventory inventory = new DynamicCapacityInventory(() -> 512);
+        inventory.replaceSyntheticSlot(0, new ItemStack(Items.APPLE));
+        inventory.replaceSyntheticSlot(36, new ItemStack(Items.DIRT, 32));
+
+        assertTrue(inventory.moveBackendStackToMain(new ItemStack(Items.DIRT)));
+        assertEquals(Items.APPLE, inventory.syntheticStack(0).getItem());
+        assertEquals(Items.DIRT, inventory.syntheticStack(9).getItem());
+        assertEquals(32, inventory.syntheticStack(9).getCount());
+        assertTrue(inventory.syntheticStack(36).isEmpty());
+        assertFalse(inventory.moveBackendStackToMain(new ItemStack(Items.APPLE)));
+        assertTrue(inventory.validate());
+    }
 }

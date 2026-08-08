@@ -7,6 +7,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.network.chat.Component;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
@@ -26,10 +27,6 @@ public final class ClientEvents {
     @SubscribeEvent
     public static void clientTick(ClientTickEvent.Post event) {
         Minecraft minecraft = Minecraft.getInstance();
-        while (ClientKeyMappings.FOCUS_SEARCH.consumeClick()) {
-            if (minecraft.screen instanceof CapacityInventoryScreen screen) screen.focusSearch();
-            else if (minecraft.player != null && minecraft.screen == null) minecraft.setScreen(new CapacityInventoryScreen(minecraft.player));
-        }
         if (minecraft.player == null) return;
         while (ClientKeyMappings.CYCLE_FORWARD.consumeClick()) {
             PacketDistributor.sendToServer(new HotbarCyclePayload(minecraft.player.getInventory().selected, 1));
@@ -39,13 +36,17 @@ public final class ClientEvents {
         }
     }
 
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void renderHud(RenderGuiEvent.Post event) {
+        if (Minecraft.getInstance().screen != null) return;
+        renderCycleOverlay(event.getGuiGraphics());
+    }
+
+    private static void renderCycleOverlay(GuiGraphics graphics) {
         if (!ClientConfig.HOTBAR_CYCLE_OVERLAY.getAsBoolean()) return;
         ClientTransientState.CycleOverlay overlay = ClientTransientState.cycleOverlay();
         if (overlay == null) return;
         Minecraft minecraft = Minecraft.getInstance();
-        GuiGraphics graphics = event.getGuiGraphics();
         int width = Math.max(minecraft.font.width(overlay.bindingName()), minecraft.font.width(overlay.selected().getHoverName())) + 34;
         int x = (graphics.guiWidth() - width) / 2;
         int y = graphics.guiHeight() - 72;
@@ -55,18 +56,39 @@ public final class ClientEvents {
         graphics.drawString(minecraft.font, overlay.selected().isEmpty() ? Component.translatable("gui.stacksnotslots.empty") : overlay.selected().getHoverName(), x + 26, y + 18, 0xFFFFFF, false);
     }
 
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void renderContainerOverlay(ScreenEvent.Render.Post event) {
         ContainerInventoryOverlay.render(event);
+        renderCycleOverlay(event.getGuiGraphics());
     }
 
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void clickContainerOverlay(ScreenEvent.MouseButtonPressed.Pre event) {
         ContainerInventoryOverlay.click(event);
     }
 
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void scrollContainerOverlay(ScreenEvent.MouseScrolled.Pre event) {
         ContainerInventoryOverlay.scroll(event);
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public static void dragContainerOverlay(ScreenEvent.MouseDragged.Pre event) {
+        ContainerInventoryOverlay.drag(event);
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public static void releaseContainerOverlay(ScreenEvent.MouseButtonReleased.Pre event) {
+        ContainerInventoryOverlay.release(event);
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public static void keyContainerOverlay(ScreenEvent.KeyPressed.Pre event) {
+        ContainerInventoryOverlay.keyPressed(event);
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public static void characterContainerOverlay(ScreenEvent.CharacterTyped.Pre event) {
+        ContainerInventoryOverlay.characterTyped(event);
     }
 }

@@ -55,7 +55,7 @@ Return a positive per-item cost when applicable and `-1` to defer. Higher priori
 
 `StacksNotSlotsApi.INVENTORY_CAPACITY_ATTRIBUTE` is the stable `stacksnotslots:inventory_capacity` resource ID. Use normal Minecraft attribute modifiers rather than backpack-specific calls into the inventory engine.
 
-`StacksNotSlotsApi.categories(player)` returns public `CategoryView`/`CategoryRuleView` records. Treat these immutable values as query metadata only; internal category implementation types are not part of the API contract.
+`StacksNotSlotsApi.categories(player)` returns public `CategoryView`/`CategoryRuleView` records. Rule types are `ITEM`, `TAG`, and `MOD_ID`; the `MOD_ID` target's namespace is the matched mod namespace. Treat these immutable values as query metadata only; internal category implementation types are not part of the API contract.
 
 ## NeoForge capability
 

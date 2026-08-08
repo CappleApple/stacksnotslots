@@ -64,7 +64,7 @@ public final class CategoryEditorScreen extends Screen {
         int left = width / 2 - PANEL_WIDTH / 2;
         name = field(left, 38, COLUMN_WIDTH, original == null ? "New Tab" : original.displayName(),
                 "gui.stacksnotslots.name", "tooltip.stacksnotslots.name");
-        String iconValue = original == null || CategoryIcons.DYNAMIC_ICON.equals(original.icon()) ? "" : original.icon().toString();
+        String iconValue = original == null ? "" : CategoryIcons.formatIcon(original.icon());
         icon = field(left + 184, 38, COLUMN_WIDTH, iconValue,
                 "gui.stacksnotslots.icon", "tooltip.stacksnotslots.icon");
         pickupLimit = field(left, 73, COLUMN_WIDTH, Long.toString(original == null ? -1 : original.pickupLimit()),
@@ -138,7 +138,11 @@ public final class CategoryEditorScreen extends Screen {
             boolean hovered = inside(mouseX, mouseY, x, y, COLUMN_WIDTH, ROW_HEIGHT - 1);
             graphics.fill(x, y, x + COLUMN_WIDTH, y + ROW_HEIGHT - 1, hovered ? 0xA04F72A5 : 0xA0202020);
             graphics.renderItem(CategoryIcons.displayStack(rule), x + 2, y + 1);
-            String label = (rule.type() == CategoryRule.Type.TAG ? "#" : "") + rule.target();
+            String label = switch (rule.type()) {
+                case ITEM -> rule.target().toString();
+                case TAG -> "#" + rule.target();
+                case MOD_ID -> "@" + rule.target().getNamespace();
+            };
             graphics.drawString(font, font.plainSubstrByWidth(label, COLUMN_WIDTH - 39), x + 22, y + 6, 0xFFFFFF, false);
             graphics.drawString(font, "×", x + COLUMN_WIDTH - 12, y + 6, 0xFF7777, false);
         }
@@ -202,7 +206,16 @@ public final class CategoryEditorScreen extends Screen {
         suggestionScroll = 0;
         String query = raw.trim().toLowerCase(Locale.ROOT);
         if (query.isBlank()) return;
-        if (query.startsWith("#")) {
+        if (query.startsWith("@")) {
+            Set<String> seen = new HashSet<>();
+            for (Item item : BuiltInRegistries.ITEM) {
+                String namespace = BuiltInRegistries.ITEM.getKey(item).getNamespace();
+                if (seen.add(namespace) && namespace.contains(query.substring(1))) {
+                    suggestions.add(new Suggestion("@" + namespace,
+                            new CategoryRule(CategoryRule.Type.MOD_ID, ResourceLocation.fromNamespaceAndPath(namespace, "mod"))));
+                }
+            }
+        } else if (query.startsWith("#")) {
             Set<ResourceLocation> seen = new HashSet<>();
             for (Item item : BuiltInRegistries.ITEM) {
                 item.getDefaultInstance().getTags().forEach(tag -> {
@@ -228,9 +241,6 @@ public final class CategoryEditorScreen extends Screen {
         switch (editMode) {
             case INCLUDE -> toggle(includes, suggestion.rule());
             case EXCLUDE -> toggle(excludes, suggestion.rule());
-            case ICON -> {
-                if (suggestion.rule().type() == CategoryRule.Type.ITEM) icon.setValue(suggestion.rule().target().toString());
-            }
         }
     }
 
@@ -261,9 +271,10 @@ public final class CategoryEditorScreen extends Screen {
     }
 
     private void save() {
-        ResourceLocation iconId = icon.getValue().isBlank() ? CategoryIcons.DYNAMIC_ICON : ResourceLocation.tryParse(icon.getValue().trim());
+        String iconInput = icon.getValue().trim();
+        ResourceLocation iconId = CategoryIcons.parseIcon(iconInput);
         if (name.getValue().isBlank() || iconId == null
-                || !CategoryIcons.DYNAMIC_ICON.equals(iconId) && BuiltInRegistries.ITEM.getOptional(iconId).isEmpty()) return;
+                || !iconInput.isBlank() && !iconInput.startsWith("#") && BuiltInRegistries.ITEM.getOptional(iconId).isEmpty()) return;
         long limit;
         try { limit = Long.parseLong(pickupLimit.getValue().trim()); }
         catch (NumberFormatException ignored) { return; }
@@ -282,6 +293,6 @@ public final class CategoryEditorScreen extends Screen {
         return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;
     }
 
-    private enum EditMode { INCLUDE, EXCLUDE, ICON }
+    private enum EditMode { INCLUDE, EXCLUDE }
     private record Suggestion(String label, CategoryRule rule) {}
 }

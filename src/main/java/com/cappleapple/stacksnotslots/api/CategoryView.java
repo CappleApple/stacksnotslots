@@ -31,9 +31,11 @@ public record CategoryView(
     }
 
     private static CategoryRuleView ruleView(CategoryRule rule) {
-        CategoryRuleView.Type type = rule.type() == CategoryRule.Type.ITEM
-                ? CategoryRuleView.Type.ITEM
-                : CategoryRuleView.Type.TAG;
+        CategoryRuleView.Type type = switch (rule.type()) {
+            case ITEM -> CategoryRuleView.Type.ITEM;
+            case TAG -> CategoryRuleView.Type.TAG;
+            case MOD_ID -> CategoryRuleView.Type.MOD_ID;
+        };
         return new CategoryRuleView(type, rule.target());
     }
 }

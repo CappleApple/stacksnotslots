@@ -48,7 +48,7 @@ public final class ModNetwork {
     private ModNetwork() {}
 
     public static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar("3");
+        var registrar = event.registrar("4");
         registrar.playToClient(InventorySnapshotPayload.TYPE, InventorySnapshotPayload.STREAM_CODEC, ModNetwork::receiveSnapshot);
         registrar.playToClient(InventoryDeltaPayload.TYPE, InventoryDeltaPayload.STREAM_CODEC, ModNetwork::receiveDelta);
         registrar.playToClient(PlayerMetadataPayload.TYPE, PlayerMetadataPayload.STREAM_CODEC, ModNetwork::receiveMetadata);
@@ -61,6 +61,7 @@ public final class ModNetwork {
         registrar.playToServer(InventoryViewPreferencesPayload.TYPE, InventoryViewPreferencesPayload.STREAM_CODEC, ModNetwork::updateViewPreferences);
         registrar.playToServer(StowSlotPayload.TYPE, StowSlotPayload.STREAM_CODEC, ModNetwork::stowSlot);
         registrar.playToServer(PickupToHotbarPayload.TYPE, PickupToHotbarPayload.STREAM_CODEC, ModNetwork::updatePickupToHotbar);
+        registrar.playToServer(BrowserTransferPayload.TYPE, BrowserTransferPayload.STREAM_CODEC, ModNetwork::transferBrowserEntry);
         registrar.playToClient(PickupFeedbackPayload.TYPE, PickupFeedbackPayload.STREAM_CODEC, ModNetwork::pickupFeedback);
     }
 
@@ -266,8 +267,7 @@ public final class ModNetwork {
                 || payload.slot() < -1 || payload.slot() >= 36) return;
         PlayerInventoryData data = player.getData(ModAttachments.PLAYER_DATA);
         if (payload.slot() >= 0) {
-            if (player.containerMenu != player.inventoryMenu) return;
-            if (data.inventory().stowSyntheticSlot(payload.slot())) player.inventoryMenu.broadcastChanges();
+            if (data.inventory().stowSyntheticSlot(payload.slot())) player.containerMenu.broadcastChanges();
             return;
         }
 
@@ -285,6 +285,12 @@ public final class ModNetwork {
         PlayerInventoryData data = player.getData(ModAttachments.PLAYER_DATA);
         data.setPickupIntoHotbar(payload.enabled());
         sendMetadata(player);
+    }
+
+    private static void transferBrowserEntry(BrowserTransferPayload payload, IPayloadContext context) {
+        if (!(context.player() instanceof ServerPlayer player) || !allowAction(player)) return;
+        PlayerInventoryData data = player.getData(ModAttachments.PLAYER_DATA);
+        if (data.inventory().moveBackendStackToMain(payload.prototype())) player.containerMenu.broadcastChanges();
     }
 
     private static void pickupFeedback(PickupFeedbackPayload payload, IPayloadContext context) {

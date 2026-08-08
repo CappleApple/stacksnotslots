@@ -18,6 +18,7 @@ public final class CategoryMatcher {
         return switch (rule.type()) {
             case ITEM -> BuiltInRegistries.ITEM.getOptional(rule.target()).map(stack::is).orElse(false);
             case TAG -> stack.is(TagKey.create(Registries.ITEM, rule.target()));
+            case MOD_ID -> BuiltInRegistries.ITEM.getKey(stack.getItem()).getNamespace().equals(rule.target().getNamespace());
         };
     }
 }

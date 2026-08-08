@@ -49,6 +49,36 @@ class PlayerCategoryDataTest {
     }
 
     @Test
+    void modNamespaceRulesMatchAndRoundTrip() {
+        ResourceLocation minecraftNamespace = ResourceLocation.fromNamespaceAndPath("minecraft", "mod");
+        CategoryDefinition definition = new CategoryDefinition(
+                ResourceLocation.fromNamespaceAndPath("stacksnotslots", "minecraft_items"), "Minecraft", minecraftNamespace, 0,
+                List.of(new CategoryRule(CategoryRule.Type.MOD_ID, minecraftNamespace)), List.of(), -1,
+                SortMode.MOD_NAMESPACE, true, false);
+
+        assertTrue(CategoryMatcher.matches(definition, new ItemStack(Items.APPLE)));
+        PlayerCategoryData loaded = new PlayerCategoryData();
+        PlayerCategoryData original = new PlayerCategoryData();
+        original.replaceAll(List.of(definition), true);
+        loaded.load(original.save());
+        assertEquals(CategoryRule.Type.MOD_ID, loaded.categories().getFirst().includes().getFirst().type());
+        assertEquals("minecraft", loaded.categories().getFirst().includes().getFirst().target().getNamespace());
+    }
+
+    @Test
+    void presetSchemaAcceptsAtPrefixedModRules() {
+        String json = """
+                {"schemaVersion":1,"presets":[{
+                  "id":"stacksnotslots:mod_test","name":"Mod Test","icon":"minecraft:apple",
+                  "include":["@minecraft"],"exclude":[],"sort":"namespace"
+                }]}
+                """;
+        CategoryDefinition parsed = CategoryPresetManager.parse(json).getFirst();
+        assertEquals(CategoryRule.Type.MOD_ID, parsed.includes().getFirst().type());
+        assertTrue(CategoryMatcher.matches(parsed, new ItemStack(Items.DIAMOND)));
+    }
+
+    @Test
     void bundledPresetsUseTheValidatedExternalSchema() throws Exception {
         String json;
         try (var input = PlayerCategoryDataTest.class.getResourceAsStream("/default_categories.json")) {

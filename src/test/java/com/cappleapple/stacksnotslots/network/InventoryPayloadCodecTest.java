@@ -96,6 +96,20 @@ class InventoryPayloadCodecTest {
         }
     }
 
+    @Test
+    void browserTransferIdentityRoundTripsWithoutQuantity() {
+        RegistryFriendlyByteBuf buffer = createBuffer();
+        try {
+            BrowserTransferPayload.STREAM_CODEC.encode(buffer, new BrowserTransferPayload(new ItemStack(Items.DIRT, 32)));
+            buffer.readerIndex(0);
+            BrowserTransferPayload decoded = BrowserTransferPayload.STREAM_CODEC.decode(buffer);
+            assertSame(Items.DIRT, decoded.prototype().getItem());
+            assertEquals(1, decoded.prototype().getCount());
+        } finally {
+            buffer.release();
+        }
+    }
+
     private static RegistryFriendlyByteBuf createBuffer() {
         RegistryAccess.Frozen access = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
         return new RegistryFriendlyByteBuf(Unpooled.buffer(), access);

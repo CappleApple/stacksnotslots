@@ -104,8 +104,11 @@ public final class CategoryPresetManager {
         ArrayList<CategoryRule> rules = new ArrayList<>();
         for (JsonElement element : array) {
             String encoded = element.getAsString();
-            CategoryRule.Type type = encoded.startsWith("#") ? CategoryRule.Type.TAG : CategoryRule.Type.ITEM;
-            ResourceLocation target = parseId(type == CategoryRule.Type.TAG ? encoded.substring(1) : encoded, "minecraft");
+            CategoryRule.Type type = encoded.startsWith("#") ? CategoryRule.Type.TAG
+                    : encoded.startsWith("@") ? CategoryRule.Type.MOD_ID : CategoryRule.Type.ITEM;
+            ResourceLocation target = type == CategoryRule.Type.MOD_ID
+                    ? ResourceLocation.tryBuild(encoded.substring(1), "mod")
+                    : parseId(type == CategoryRule.Type.TAG ? encoded.substring(1) : encoded, "minecraft");
             if (target == null) throw new IllegalArgumentException("Invalid category rule: " + encoded);
             rules.add(new CategoryRule(type, target));
         }

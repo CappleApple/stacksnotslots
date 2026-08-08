@@ -33,7 +33,8 @@ public abstract class AbstractContainerMenuMixin {
 
         var inventory = playerInventory.player.getData(ModAttachments.PLAYER_DATA).inventory();
         if (inventory.ownsReference(source)) {
-            callback.setReturnValue(false);
+            // A player-owned source is an ordinary main-grid/hotbar/equipment move. Let vanilla
+            // honor the exact destination range instead of treating it as external insertion.
             return;
         }
         var insertion = InventoryTransactions.insert(playerInventory.player, source, InsertionContext.MANUAL_TRANSFER, false);

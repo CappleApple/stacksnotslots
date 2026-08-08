@@ -214,6 +214,28 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
         return true;
     }
 
+    /** Moves one matching backend stack into the first empty main-grid position, if both exist. */
+    public boolean moveBackendStackToMain(ItemStack prototype) {
+        if (prototype == null || prototype.isEmpty()) return false;
+        int target = -1;
+        for (int slot = 9; slot < 36; slot++) {
+            if (syntheticStack(slot).isEmpty()) { target = slot; break; }
+        }
+        if (target < 0) return false;
+        int source = -1;
+        for (int slot = 36; slot < backingStacks.size(); slot++) {
+            if (ItemStack.isSameItemSameComponents(backingStacks.get(slot), prototype)) { source = slot; break; }
+        }
+        if (source < 0) return false;
+        ensureSyntheticSlot(target);
+        backingStacks.set(target, backingStacks.get(source));
+        backingStacks.set(source, ItemStack.EMPTY);
+        trimTrailingEmptySlots();
+        recalculateCapacity();
+        changed();
+        return true;
+    }
+
     /** Atomically swaps two compatibility positions. Used only by an explicit hotbar-cycle key press. */
     public void swapSyntheticSlots(int first, int second) {
         if (first < 0 || second < 0 || first == Integer.MAX_VALUE || second == Integer.MAX_VALUE) {

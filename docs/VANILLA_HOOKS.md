@@ -6,7 +6,7 @@ Minecraft 1.21.1 assumes 36 player item indices in menus and several direct code
 
 The mixin activates only after the one-time vanilla inventory migration marker is set.
 
-- `getItem`, `getSelected`, `setItem`, and removal methods map vanilla indices 0–35 to sparse backing positions, active category projections, or hotbar bindings.
+- `getItem`, `getSelected`, `setItem`, and removal methods map vanilla indices 0–35 to stable sparse backing positions.
 - both `add` overloads call the centralized capacity transaction; pickup, commands, rewards, trading, crafting remainders, and most modded vanilla-style insertion therefore share one enforcement path.
 - `getFreeSlot`, stack matching, and remaining-space queries describe only the projection and never define logical carrying capacity.
 - `tick` ticks every actual backing stack; changes made through a live held-item reference are reconciled by identity/count hash.
@@ -24,11 +24,13 @@ The redirect wraps only the call from `ItemEntity.playerTouch` to `Inventory.add
 
 Vanilla menu transfer logic splits source stacks before calling `Inventory.setItem`. The slot mixin reports a capacity-adjusted maximum for player item slots so the source is split by exactly the amount global capacity can accept. Existing stack capacity is credited when a slot is being replaced. Armor/offhand and non-player containers are untouched.
 
-## Menu shift-click mixins
+## Menu shift-click and equipment mixins
 
 `AbstractContainerMenuMixin` recognizes destination ranges made entirely of vanilla player-storage slots and routes the source directly through the central insertion transaction. This allows chest, furnace, crafting-result, and modded-menu shift-clicks to append beyond the 36-slot projection whenever capacity remains.
 
-`InventoryMenuMixin` suppresses vanilla's main-inventory-to-hotbar shuffle because both ranges are views of the same collection. Shift-equipping armor/offhand and transfers from crafting/equipment slots remain active.
+When the source is already owned by the player, the mixin leaves the operation to vanilla. Main-grid/hotbar shift-clicks therefore keep their normal destination ranges, and shift-equipping armor/offhand remains active. While the browser is open, its topmost input layer explicitly converts player-slot shift-clicks into backend stows instead.
+
+`PlayerMixin` redirects the direct main-hand `NonNullList.set` inside `Player#setItemSlot` into the logical inventory. This covers the vanilla swap-to-offhand action without duplicating a stale visual stack in the selected hotbar slot.
 
 ## Dynamic NeoForge view
 
@@ -38,7 +40,7 @@ Vanilla menu transfer logic splits source stacks before calling `Inventory.setIt
 
 `GuiMixin` changes only vanilla HUD hotbar item lookup, routing its direct `Inventory.items` read through the live `Inventory.getItem` projection. This fixes immediate visual synchronization without turning the fixed vanilla field into storage.
 
-The inventory browser is collapsed by default. Its expanded bounds are registered with JEI and EMI as GUI exclusion areas, allowing their ingredient lists to reserve space around the drawer.
+The inventory browser is collapsed by default and uses one draggable overlay on every container screen. Its expanded bounds are registered with JEI and EMI as GUI exclusion areas, allowing their ingredient lists to reserve space around the floating panel.
 
 ## Remaining direct-field risk
 

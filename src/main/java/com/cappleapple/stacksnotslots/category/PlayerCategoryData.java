@@ -82,7 +82,14 @@ public final class PlayerCategoryData {
 
     private static ListTag saveRules(List<CategoryRule> rules) {
         ListTag list = new ListTag();
-        for (CategoryRule rule : rules) list.add(StringTag.valueOf((rule.type() == CategoryRule.Type.TAG ? "#" : "") + rule.target()));
+        for (CategoryRule rule : rules) {
+            String encoded = switch (rule.type()) {
+                case ITEM -> rule.target().toString();
+                case TAG -> "#" + rule.target();
+                case MOD_ID -> "@" + rule.target().getNamespace();
+            };
+            list.add(StringTag.valueOf(encoded));
+        }
         return list;
     }
 
@@ -102,8 +109,11 @@ public final class PlayerCategoryData {
         ArrayList<CategoryRule> rules = new ArrayList<>();
         for (int i = 0; i < list.size(); i++) {
             String encoded = list.getString(i);
-            CategoryRule.Type type = encoded.startsWith("#") ? CategoryRule.Type.TAG : CategoryRule.Type.ITEM;
-            ResourceLocation target = ResourceLocation.tryParse(type == CategoryRule.Type.TAG ? encoded.substring(1) : encoded);
+            CategoryRule.Type type = encoded.startsWith("#") ? CategoryRule.Type.TAG
+                    : encoded.startsWith("@") ? CategoryRule.Type.MOD_ID : CategoryRule.Type.ITEM;
+            ResourceLocation target = type == CategoryRule.Type.MOD_ID
+                    ? ResourceLocation.tryBuild(encoded.substring(1), "mod")
+                    : ResourceLocation.tryParse(type == CategoryRule.Type.TAG ? encoded.substring(1) : encoded);
             if (target != null) rules.add(new CategoryRule(type, target));
         }
         return rules;

@@ -6,8 +6,8 @@
   "mixins": [
     "AbstractContainerMenuMixin",
     "InventoryMixin",
-    "InventoryMenuMixin",
     "ItemEntityMixin",
+    "PlayerMixin",
     "SlotMixin"
   ],
   "client": [
