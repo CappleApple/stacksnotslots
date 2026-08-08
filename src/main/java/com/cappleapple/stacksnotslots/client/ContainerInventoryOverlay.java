@@ -25,7 +25,6 @@ import java.util.Map;
 import java.util.UUID;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.Rect2i;
@@ -57,7 +56,7 @@ public final class ContainerInventoryOverlay {
     private static boolean open;
     private static boolean searchFocused;
     private static boolean dragging;
-    private static boolean consumeRelease;
+    private static int consumedReleaseButton = -1;
     private static double dragOffsetX;
     private static double dragOffsetY;
     private static double pressX;
@@ -77,13 +76,44 @@ public final class ContainerInventoryOverlay {
 
     private ContainerInventoryOverlay() {}
 
-    /** Added during Init.Pre so the bounds-scoped listener precedes the screen's own widgets. */
-    public static void attach(ScreenEvent.Init.Pre event) {
+    /** Keeps server browser state in sync without depending on a screen's child-input implementation. */
+    public static void initialize(ScreenEvent.Init.Pre event) {
         if (!supports(event.getScreen())) return;
-        event.addListener(new BrowserInputListener((AbstractContainerScreen<?>)event.getScreen()));
         if (stateSyncedScreen != event.getScreen()) {
             stateSyncedScreen = event.getScreen();
             PacketDistributor.sendToServer(new BrowserStatePayload(isOpen()));
+        }
+    }
+
+    /**
+     * Routes input before any concrete container screen sees it. Modded screens are not required to
+     * dispatch through {@link net.minecraft.client.gui.components.events.ContainerEventHandler}, so
+     * registering this overlay as a child widget is not universal. Only exact overlay bounds (or the
+     * explicit control-click stow gesture) are cancelled here.
+     */
+    public static void click(ScreenEvent.MouseButtonPressed.Pre event) {
+        if (!supports(event.getScreen()) || Minecraft.getInstance().player == null) return;
+        AbstractContainerScreen<?> screen = (AbstractContainerScreen<?>)event.getScreen();
+        if (mouseClicked(screen, event.getMouseX(), event.getMouseY(), event.getButton())) {
+            event.setCanceled(true);
+            return;
+        }
+
+        var slot = screen.getSlotUnderMouse();
+        if (event.getButton() == 0 && Screen.hasControlDown() && slot != null && slot.container instanceof Inventory
+                && slot.getContainerSlot() >= 0 && slot.getContainerSlot() < Inventory.INVENTORY_SIZE
+                && !slot.getItem().isEmpty()) {
+            consumedReleaseButton = event.getButton();
+            PacketDistributor.sendToServer(new StowSlotPayload(slot.getContainerSlot()));
+            event.setCanceled(true);
+        }
+    }
+
+    /** Cancels scrolling only when a browser control actually handled it. */
+    public static void scroll(ScreenEvent.MouseScrolled.Pre event) {
+        if (!supports(event.getScreen())) return;
+        if (mouseScrolled((AbstractContainerScreen<?>)event.getScreen(), event.getMouseX(), event.getMouseY(), event.getScrollDeltaY())) {
+            event.setCanceled(true);
         }
     }
 
@@ -112,11 +142,11 @@ public final class ContainerInventoryOverlay {
         event.setCanceled(true);
     }
 
-    /** Cancels only the release paired with a browser press, avoiding vanilla outside-click drops. */
+    /** Cancels only the release paired with a browser-owned press, avoiding click-through. */
     public static void release(ScreenEvent.MouseButtonReleased.Pre event) {
-        if (!consumeRelease || event.getButton() != 0) return;
-        consumeRelease = false;
-        if (dragging) {
+        if (event.getButton() != consumedReleaseButton) return;
+        consumedReleaseButton = -1;
+        if (dragging && event.getButton() == 0) {
             dragging = false;
             if (Math.hypot(event.getMouseX() - pressX, event.getMouseY() - pressY) < 3.0) setOpen(!open, event.getScreen());
             ClientConfig.BROWSER_HANDLE_X.set(handleX);
@@ -221,13 +251,15 @@ public final class ContainerInventoryOverlay {
     private static boolean mouseClicked(AbstractContainerScreen<?> screen, double mouseX, double mouseY, int button) {
         ensurePosition(screen);
         boolean handleVisible = ClientConfig.BROWSER_HANDLE_VISIBLE.getAsBoolean();
-        if (handleVisible && button == 0 && inside(mouseX, mouseY, handleX, handleY, HANDLE_WIDTH, HANDLE_HEIGHT)) {
-            dragging = true;
-            consumeRelease = true;
-            dragOffsetX = mouseX - handleX;
-            dragOffsetY = mouseY - handleY;
-            pressX = mouseX;
-            pressY = mouseY;
+        if (handleVisible && inside(mouseX, mouseY, handleX, handleY, HANDLE_WIDTH, HANDLE_HEIGHT)) {
+            consumedReleaseButton = button;
+            if (button == 0) {
+                dragging = true;
+                dragOffsetX = mouseX - handleX;
+                dragOffsetY = mouseY - handleY;
+                pressX = mouseX;
+                pressY = mouseY;
+            }
             return true;
         }
         if (!handleVisible || !open) return false;
@@ -237,7 +269,7 @@ public final class ContainerInventoryOverlay {
             return false;
         }
 
-        consumeRelease = button == 0;
+        consumedReleaseButton = button;
         if (inside(mouseX, mouseY, layout.searchX, layout.searchY, layout.searchWidth, CONTROL_HEIGHT)) {
             searchFocused = true;
             return true;
@@ -681,40 +713,6 @@ public final class ContainerInventoryOverlay {
             int contentX, int contentY, int contentWidth, int contentHeight, int visibleEntryCount,
             int capacityTextY, int capacityBarY, int directionX, int manageX, int settingsX, int bottomButtonY
     ) {}
-
-    private static final class BrowserInputListener implements GuiEventListener {
-        private final AbstractContainerScreen<?> screen;
-        private boolean focused;
-
-        private BrowserInputListener(AbstractContainerScreen<?> screen) { this.screen = screen; }
-
-        @Override public boolean mouseClicked(double mouseX, double mouseY, int button) {
-            var slot = screen.getSlotUnderMouse();
-            if (button == 0 && Screen.hasControlDown() && slot != null && slot.container instanceof Inventory
-                    && slot.getContainerSlot() >= 0 && slot.getContainerSlot() < Inventory.INVENTORY_SIZE
-                    && !slot.getItem().isEmpty()) {
-                PacketDistributor.sendToServer(new StowSlotPayload(slot.getContainerSlot()));
-                return true;
-            }
-            return ContainerInventoryOverlay.mouseClicked(screen, mouseX, mouseY, button);
-        }
-
-        @Override public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-            return ContainerInventoryOverlay.mouseScrolled(screen, mouseX, mouseY, scrollY);
-        }
-
-        @Override public boolean isMouseOver(double mouseX, double mouseY) {
-            if (!ClientConfig.BROWSER_HANDLE_VISIBLE.getAsBoolean()) return false;
-            ensurePosition(screen);
-            if (inside(mouseX, mouseY, handleX, handleY, HANDLE_WIDTH, HANDLE_HEIGHT)) return true;
-            if (!open) return false;
-            Rect2i panel = panelBounds(screen);
-            return inside(mouseX, mouseY, panel.getX(), panel.getY(), panel.getWidth(), panel.getHeight());
-        }
-
-        @Override public void setFocused(boolean focused) { this.focused = focused; }
-        @Override public boolean isFocused() { return focused; }
-    }
 
     private static final class SearchIdentity {
         private final ItemStack stack;

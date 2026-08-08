@@ -111,8 +111,18 @@ public final class ClientEvents {
     }
 
     @SubscribeEvent(priority = EventPriority.HIGHEST)
-    public static void attachContainerOverlay(ScreenEvent.Init.Pre event) {
-        ContainerInventoryOverlay.attach(event);
+    public static void initializeContainerOverlay(ScreenEvent.Init.Pre event) {
+        ContainerInventoryOverlay.initialize(event);
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public static void clickContainerOverlay(ScreenEvent.MouseButtonPressed.Pre event) {
+        ContainerInventoryOverlay.click(event);
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public static void scrollContainerOverlay(ScreenEvent.MouseScrolled.Pre event) {
+        ContainerInventoryOverlay.scroll(event);
     }
 
     @SubscribeEvent(priority = EventPriority.HIGHEST)
