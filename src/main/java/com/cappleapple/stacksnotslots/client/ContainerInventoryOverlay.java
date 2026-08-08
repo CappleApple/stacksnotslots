@@ -6,14 +6,16 @@ import com.cappleapple.stacksnotslots.category.CategoryMatcher;
 import com.cappleapple.stacksnotslots.category.SortMode;
 import com.cappleapple.stacksnotslots.client.screen.CategoryIcons;
 import com.cappleapple.stacksnotslots.client.screen.CategoryManagerScreen;
-import com.cappleapple.stacksnotslots.client.screen.CapacityInventoryScreen;
 import com.cappleapple.stacksnotslots.client.screen.InventoryBrowserSettingsScreen;
 import com.cappleapple.stacksnotslots.config.ClientConfig;
 import com.cappleapple.stacksnotslots.data.ModAttachments;
+import com.cappleapple.stacksnotslots.network.BrowserStatePayload;
 import com.cappleapple.stacksnotslots.network.BrowserTransferPayload;
+import com.cappleapple.stacksnotslots.network.BulkTransferPayload;
 import com.cappleapple.stacksnotslots.network.InventoryActionPayload;
 import com.cappleapple.stacksnotslots.network.InventoryViewPreferencesPayload;
 import com.cappleapple.stacksnotslots.network.StowSlotPayload;
+import com.mojang.blaze3d.platform.InputConstants;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -22,36 +24,40 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import net.minecraft.client.Minecraft;
-import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.entity.player.Inventory;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.lwjgl.glfw.GLFW;
 
-/** A draggable, topmost logical-inventory browser shared by every container screen. */
+/** A topmost logical-inventory browser whose native listener owns only its visible bounds. */
 public final class ContainerInventoryOverlay {
-    private static final int HANDLE_SIZE = 20;
-    private static final int CONTROL_SIZE = 20;
+    public static final int CONTROL_WIDTH = 20;
+    public static final int CONTROL_HEIGHT = 18;
+    private static final int HANDLE_WIDTH = 20;
+    private static final int HANDLE_HEIGHT = 18;
     private static final int GRID_CELL = 20;
     private static final int LIST_ROW = 18;
     private static final int MAX_QUERY = 96;
     private static Screen lastScreen;
+    private static Screen stateSyncedScreen;
     private static int handleX;
     private static int handleY;
     private static boolean initializedPosition;
     private static boolean open;
     private static boolean searchFocused;
     private static boolean dragging;
+    private static boolean consumeRelease;
     private static double dragOffsetX;
     private static double dragOffsetY;
     private static double pressX;
@@ -71,6 +77,16 @@ public final class ContainerInventoryOverlay {
 
     private ContainerInventoryOverlay() {}
 
+    /** Added during Init.Pre so the bounds-scoped listener precedes the screen's own widgets. */
+    public static void attach(ScreenEvent.Init.Pre event) {
+        if (!supports(event.getScreen())) return;
+        event.addListener(new BrowserInputListener((AbstractContainerScreen<?>)event.getScreen()));
+        if (stateSyncedScreen != event.getScreen()) {
+            stateSyncedScreen = event.getScreen();
+            PacketDistributor.sendToServer(new BrowserStatePayload(isOpen()));
+        }
+    }
+
     public static void render(ScreenEvent.Render.Post event) {
         if (!supports(event.getScreen()) || Minecraft.getInstance().player == null) return;
         ensurePosition(event.getScreen());
@@ -79,122 +95,34 @@ public final class ContainerInventoryOverlay {
         hoveredEntry = null;
         hoveredCategory = null;
         hoveredControl = null;
-        if (open) renderPanel(event.getScreen(), graphics, event.getMouseX(), event.getMouseY());
+        if (open) renderPanel((AbstractContainerScreen<?>)event.getScreen(), graphics, event.getMouseX(), event.getMouseY());
         renderHandle(graphics, event.getMouseX(), event.getMouseY());
         if (hoveredEntry != null) graphics.renderTooltip(Minecraft.getInstance().font, hoveredEntry.representative(), event.getMouseX(), event.getMouseY());
         else if (hoveredCategory != null) graphics.renderTooltip(Minecraft.getInstance().font, Component.literal(hoveredCategory.displayName()), event.getMouseX(), event.getMouseY());
         else if (hoveredControl != null) graphics.renderTooltip(Minecraft.getInstance().font, Component.translatable(hoveredControl), event.getMouseX(), event.getMouseY());
     }
 
-    public static void click(ScreenEvent.MouseButtonPressed.Pre event) {
-        if (!supports(event.getScreen()) || Minecraft.getInstance().player == null) return;
-        ensurePosition(event.getScreen());
-        boolean handleVisible = ClientConfig.BROWSER_HANDLE_VISIBLE.getAsBoolean();
-        double mouseX = event.getMouseX();
-        double mouseY = event.getMouseY();
-        if (handleVisible && event.getButton() == 0 && inside(mouseX, mouseY, handleX, handleY, HANDLE_SIZE, HANDLE_SIZE)) {
-            dragging = true;
-            dragOffsetX = mouseX - handleX;
-            dragOffsetY = mouseY - handleY;
-            pressX = mouseX;
-            pressY = mouseY;
-            event.setCanceled(true);
-            return;
-        }
-
-        AbstractContainerScreen<?> screen = (AbstractContainerScreen<?>)event.getScreen();
-        Slot hoveredSlot = screen.getSlotUnderMouse();
-        if (event.getButton() == 0 && hoveredSlot != null && hoveredSlot.container instanceof Inventory
-                && hoveredSlot.getContainerSlot() >= 0 && hoveredSlot.getContainerSlot() < Inventory.INVENTORY_SIZE
-                && !hoveredSlot.getItem().isEmpty()
-                && (Screen.hasControlDown() || isOpen() && Screen.hasShiftDown())) {
-            PacketDistributor.sendToServer(new StowSlotPayload(hoveredSlot.getContainerSlot()));
-            event.setCanceled(true);
-            return;
-        }
-        if (!handleVisible || !open) return;
-        Rect2i panel = panelBounds(screen);
-        if (!inside(mouseX, mouseY, panel.getX(), panel.getY(), panel.getWidth(), panel.getHeight())) {
-            searchFocused = false;
-            return;
-        }
-
-        PanelLayout layout = layout(screen);
-        if (inside(mouseX, mouseY, layout.searchX, layout.searchY, layout.searchWidth, 18)) {
-            searchFocused = true;
-            event.setCanceled(true);
-            return;
-        }
-        searchFocused = false;
-        if (inside(mouseX, mouseY, layout.categoryX, layout.controlsY, CONTROL_SIZE, CONTROL_SIZE)) {
-            changeCategory(1);
-            event.setCanceled(true);
-            return;
-        }
-        if (inside(mouseX, mouseY, layout.modeX, layout.controlsY, CONTROL_SIZE, CONTROL_SIZE)) {
-            toggleViewMode();
-            refreshDisplacedInventory(event.getScreen());
-            event.setCanceled(true);
-            return;
-        }
-        if (inside(mouseX, mouseY, layout.sortX, layout.controlsY, CONTROL_SIZE, CONTROL_SIZE)) {
-            cycleSort();
-            event.setCanceled(true);
-            return;
-        }
-        if (inside(mouseX, mouseY, layout.manageX, layout.bottomButtonY, CONTROL_SIZE, CONTROL_SIZE)) {
-            Minecraft.getInstance().setScreen(new CategoryManagerScreen(screen, Minecraft.getInstance().player));
-            event.setCanceled(true);
-            return;
-        }
-        if (inside(mouseX, mouseY, layout.settingsX, layout.bottomButtonY, CONTROL_SIZE, CONTROL_SIZE)) {
-            Minecraft.getInstance().setScreen(new InventoryBrowserSettingsScreen(screen));
-            event.setCanceled(true);
-            return;
-        }
-
-        LogicalInventoryEntry entry = entryAt(screen, mouseX, mouseY);
-        if (entry != null && (event.getButton() == 0 || event.getButton() == 1)) {
-            ItemStack carried = Minecraft.getInstance().player.containerMenu.getCarried();
-            if (!carried.isEmpty()) PacketDistributor.sendToServer(new StowSlotPayload(-1));
-            else if (Screen.hasShiftDown()) PacketDistributor.sendToServer(new BrowserTransferPayload(entry.representative()));
-            else PacketDistributor.sendToServer(new InventoryActionPayload(event.getButton() == 1
-                    ? InventoryActionPayload.Action.TAKE_HALF : InventoryActionPayload.Action.TAKE_STACK, entry.representative()));
-        }
-        event.setCanceled(true);
-    }
-
+    /** Scoped pre-event support for an overlay press; unrelated modded-screen input is never cancelled. */
     public static void drag(ScreenEvent.MouseDragged.Pre event) {
         if (!dragging || event.getMouseButton() != 0 || !supports(event.getScreen())) return;
-        handleX = clamp((int)Math.round(event.getMouseX() - dragOffsetX), 0, event.getScreen().width - HANDLE_SIZE);
-        handleY = clamp((int)Math.round(event.getMouseY() - dragOffsetY), 0, event.getScreen().height - HANDLE_SIZE);
+        Screen screen = event.getScreen();
+        handleX = clamp((int)Math.round(event.getMouseX() - dragOffsetX), 0, screen.width - HANDLE_WIDTH);
+        handleY = clamp((int)Math.round(event.getMouseY() - dragOffsetY), 0, screen.height - HANDLE_HEIGHT);
+        chooseAutomaticSide(screen);
         event.setCanceled(true);
     }
 
+    /** Cancels only the release paired with a browser press, avoiding vanilla outside-click drops. */
     public static void release(ScreenEvent.MouseButtonReleased.Pre event) {
-        if (!dragging || event.getButton() != 0) return;
-        dragging = false;
-        if (Math.hypot(event.getMouseX() - pressX, event.getMouseY() - pressY) < 3.0) open = !open;
-        ClientConfig.BROWSER_HANDLE_X.set(handleX);
-        ClientConfig.BROWSER_HANDLE_Y.set(handleY);
-        event.setCanceled(true);
-        refreshDisplacedInventory(event.getScreen());
-    }
-
-    public static void scroll(ScreenEvent.MouseScrolled.Pre event) {
-        if (!supports(event.getScreen()) || !open || !ClientConfig.BROWSER_HANDLE_VISIBLE.getAsBoolean()) return;
-        AbstractContainerScreen<?> screen = (AbstractContainerScreen<?>)event.getScreen();
-        PanelLayout layout = layout(screen);
-        if (inside(event.getMouseX(), event.getMouseY(), layout.categoryX, layout.controlsY, CONTROL_SIZE, CONTROL_SIZE)) {
-            changeCategory(event.getScrollDeltaY() > 0 ? -1 : 1);
-            event.setCanceled(true);
-            return;
+        if (!consumeRelease || event.getButton() != 0) return;
+        consumeRelease = false;
+        if (dragging) {
+            dragging = false;
+            if (Math.hypot(event.getMouseX() - pressX, event.getMouseY() - pressY) < 3.0) setOpen(!open, event.getScreen());
+            ClientConfig.BROWSER_HANDLE_X.set(handleX);
+            ClientConfig.BROWSER_HANDLE_Y.set(handleY);
+            refreshIngredientLayout(event.getScreen());
         }
-        if (!inside(event.getMouseX(), event.getMouseY(), layout.contentX, layout.contentY, layout.contentWidth, layout.contentHeight)) return;
-        int page = ClientConfig.BROWSER_VIEW_MODE.get() == ClientConfig.BrowserViewMode.GRID
-                ? ClientConfig.BROWSER_GRID_COLUMNS.getAsInt() : 1;
-        int maximum = Math.max(0, entries().size() - layout.visibleEntryCount);
-        scroll = clamp(scroll - (int)Math.signum(event.getScrollDeltaY()) * page, 0, maximum);
         event.setCanceled(true);
     }
 
@@ -202,13 +130,13 @@ public final class ContainerInventoryOverlay {
         if (!supports(event.getScreen())) return;
         if (ClientKeyMappings.TOGGLE_BROWSER.isActiveAndMatches(InputConstants.getKey(event.getKeyCode(), event.getScanCode()))) {
             if (open) {
-                open = false;
+                setOpen(false, event.getScreen());
                 ClientConfig.BROWSER_HANDLE_VISIBLE.set(false);
             } else {
                 ClientConfig.BROWSER_HANDLE_VISIBLE.set(!ClientConfig.BROWSER_HANDLE_VISIBLE.getAsBoolean());
+                refreshIngredientLayout(event.getScreen());
             }
             searchFocused = false;
-            refreshDisplacedInventory(event.getScreen());
             event.setCanceled(true);
             return;
         }
@@ -239,8 +167,9 @@ public final class ContainerInventoryOverlay {
 
     public static void characterTyped(ScreenEvent.CharacterTyped.Pre event) {
         if (!supports(event.getScreen()) || !open || !searchFocused || query.length() >= MAX_QUERY) return;
-        if (isAllowedSearchCharacter(event.getCodePoint())) {
-            query += event.getCodePoint();
+        char character = event.getCodePoint();
+        if (character >= 32 && character != 127) {
+            query += character;
             invalidateEntries();
             event.setCanceled(true);
         }
@@ -248,45 +177,127 @@ public final class ContainerInventoryOverlay {
 
     public static void focusSearch() {
         ClientConfig.BROWSER_HANDLE_VISIBLE.set(true);
-        open = true;
+        setOpen(true, Minecraft.getInstance().screen);
         searchFocused = true;
     }
 
-    private static boolean isAllowedSearchCharacter(char character) {
-        return character >= 32 && character != 127;
-    }
-
-    private static void refreshDisplacedInventory(Screen screen) {
-        if (ClientConfig.BROWSER_DISPLACES_CONTAINER.getAsBoolean()
-                && screen instanceof CapacityInventoryScreen
-                && Minecraft.getInstance().player != null) {
-            Minecraft.getInstance().setScreen(new CapacityInventoryScreen(Minecraft.getInstance().player));
-        }
-    }
-
     public static boolean isOpen() { return open && ClientConfig.BROWSER_HANDLE_VISIBLE.getAsBoolean(); }
+
+    public static boolean isDragging() { return dragging; }
+
+    /** Exact topmost input region, used by the custom inventory selector to avoid competing when overlapped. */
+    public static boolean ownsPoint(Screen screen, double mouseX, double mouseY) {
+        if (!supports(screen) || !ClientConfig.BROWSER_HANDLE_VISIBLE.getAsBoolean()) return false;
+        ensurePosition(screen);
+        if (inside(mouseX, mouseY, handleX, handleY, HANDLE_WIDTH, HANDLE_HEIGHT)) return true;
+        if (!open) return false;
+        Rect2i panel = panelBounds((AbstractContainerScreen<?>)screen);
+        return inside(mouseX, mouseY, panel.getX(), panel.getY(), panel.getWidth(), panel.getHeight());
+    }
 
     public static Rect2i currentBounds(Screen screen) {
         if (!supports(screen)) return new Rect2i(0, 0, 0, 0);
         ensurePosition(screen);
         if (!ClientConfig.BROWSER_HANDLE_VISIBLE.getAsBoolean()) return new Rect2i(0, 0, 0, 0);
-        if (!open) return new Rect2i(handleX, handleY, HANDLE_SIZE, HANDLE_SIZE);
+        if (!open) return new Rect2i(handleX, handleY, HANDLE_WIDTH, HANDLE_HEIGHT);
         Rect2i panel = panelBounds((AbstractContainerScreen<?>)screen);
         int left = Math.min(handleX, panel.getX());
         int top = Math.min(handleY, panel.getY());
-        int right = Math.max(handleX + HANDLE_SIZE, panel.getX() + panel.getWidth());
-        int bottom = Math.max(handleY + HANDLE_SIZE, panel.getY() + panel.getHeight());
+        int right = Math.max(handleX + HANDLE_WIDTH, panel.getX() + panel.getWidth());
+        int bottom = Math.max(handleY + HANDLE_HEIGHT, panel.getY() + panel.getHeight());
         return new Rect2i(left, top, right - left, bottom - top);
     }
 
-    public static int displacementOffset(Screen screen) {
-        if (!supports(screen) || !isOpen() || !ClientConfig.BROWSER_DISPLACES_CONTAINER.getAsBoolean()) return 0;
-        int amount = panelWidth() / 2 + 12;
-        return dockRight(screen) ? -amount : amount;
+    /** Exact dynamic areas so ingredient overlays wrap each floating element instead of reserving the gap between them. */
+    public static List<Rect2i> currentAreas(Screen screen) {
+        if (!supports(screen)) return List.of();
+        ensurePosition(screen);
+        if (!ClientConfig.BROWSER_HANDLE_VISIBLE.getAsBoolean()) return List.of();
+        Rect2i handle = new Rect2i(handleX, handleY, HANDLE_WIDTH, HANDLE_HEIGHT);
+        if (!open) return List.of(handle);
+        return List.of(handle, panelBounds((AbstractContainerScreen<?>)screen));
     }
 
-    private static void renderPanel(Screen screen, GuiGraphics graphics, int mouseX, int mouseY) {
-        PanelLayout layout = layout((AbstractContainerScreen<?>)screen);
+    private static boolean mouseClicked(AbstractContainerScreen<?> screen, double mouseX, double mouseY, int button) {
+        ensurePosition(screen);
+        boolean handleVisible = ClientConfig.BROWSER_HANDLE_VISIBLE.getAsBoolean();
+        if (handleVisible && button == 0 && inside(mouseX, mouseY, handleX, handleY, HANDLE_WIDTH, HANDLE_HEIGHT)) {
+            dragging = true;
+            consumeRelease = true;
+            dragOffsetX = mouseX - handleX;
+            dragOffsetY = mouseY - handleY;
+            pressX = mouseX;
+            pressY = mouseY;
+            return true;
+        }
+        if (!handleVisible || !open) return false;
+        PanelLayout layout = layout(screen);
+        if (!inside(mouseX, mouseY, layout.panelX, layout.panelY, layout.panelWidth, layout.panelHeight)) {
+            searchFocused = false;
+            return false;
+        }
+
+        consumeRelease = button == 0;
+        if (inside(mouseX, mouseY, layout.searchX, layout.searchY, layout.searchWidth, CONTROL_HEIGHT)) {
+            searchFocused = true;
+            return true;
+        }
+        searchFocused = false;
+        if (inside(mouseX, mouseY, layout.categoryX, layout.controlsY, CONTROL_WIDTH, CONTROL_HEIGHT)) {
+            changeCategory(button == 1 ? -1 : 1);
+            return true;
+        }
+        if (inside(mouseX, mouseY, layout.sortX, layout.controlsY, CONTROL_WIDTH, CONTROL_HEIGHT)) {
+            cycleSort();
+            return true;
+        }
+        if (inside(mouseX, mouseY, layout.transferX, layout.controlsY, CONTROL_WIDTH, CONTROL_HEIGHT)) {
+            PacketDistributor.sendToServer(new BulkTransferPayload(Screen.hasShiftDown()
+                    ? BulkTransferPayload.Direction.TO_CONTAINER : BulkTransferPayload.Direction.FROM_CONTAINER,
+                    BulkTransferPayload.Target.OPEN_MENU));
+            return true;
+        }
+        if (inside(mouseX, mouseY, layout.directionX, layout.bottomButtonY, CONTROL_WIDTH, CONTROL_HEIGHT)) {
+            cycleDockSide(screen);
+            return true;
+        }
+        if (inside(mouseX, mouseY, layout.manageX, layout.bottomButtonY, CONTROL_WIDTH, CONTROL_HEIGHT)) {
+            Minecraft.getInstance().setScreen(new CategoryManagerScreen(screen, Minecraft.getInstance().player));
+            return true;
+        }
+        if (inside(mouseX, mouseY, layout.settingsX, layout.bottomButtonY, CONTROL_WIDTH, CONTROL_HEIGHT)) {
+            Minecraft.getInstance().setScreen(new InventoryBrowserSettingsScreen(screen));
+            return true;
+        }
+
+        LogicalInventoryEntry entry = entryAt(screen, mouseX, mouseY);
+        if (entry != null && (button == 0 || button == 1)) {
+            ItemStack carried = Minecraft.getInstance().player.containerMenu.getCarried();
+            if (!carried.isEmpty()) PacketDistributor.sendToServer(new StowSlotPayload(-1));
+            else if (Screen.hasShiftDown()) PacketDistributor.sendToServer(new BrowserTransferPayload(entry.representative()));
+            else PacketDistributor.sendToServer(new InventoryActionPayload(button == 1
+                    ? InventoryActionPayload.Action.TAKE_HALF : InventoryActionPayload.Action.TAKE_STACK, entry.representative()));
+        }
+        return true;
+    }
+
+    private static boolean mouseScrolled(AbstractContainerScreen<?> screen, double mouseX, double mouseY, double deltaY) {
+        if (!open || !ClientConfig.BROWSER_HANDLE_VISIBLE.getAsBoolean()) return false;
+        PanelLayout layout = layout(screen);
+        if (inside(mouseX, mouseY, layout.categoryX, layout.controlsY, CONTROL_WIDTH, CONTROL_HEIGHT)) {
+            changeCategory(deltaY > 0 ? -1 : 1);
+            return true;
+        }
+        if (!inside(mouseX, mouseY, layout.contentX, layout.contentY, layout.contentWidth, layout.contentHeight)) return false;
+        int page = ClientConfig.BROWSER_VIEW_MODE.get() == ClientConfig.BrowserViewMode.GRID
+                ? ClientConfig.BROWSER_GRID_COLUMNS.getAsInt() : 1;
+        int maximum = Math.max(0, entries().size() - layout.visibleEntryCount);
+        scroll = clamp(scroll - (int)Math.signum(deltaY) * page, 0, maximum);
+        return true;
+    }
+
+    private static void renderPanel(AbstractContainerScreen<?> screen, GuiGraphics graphics, int mouseX, int mouseY) {
+        PanelLayout layout = layout(screen);
         Minecraft minecraft = Minecraft.getInstance();
         var inventory = minecraft.player.getData(ModAttachments.PLAYER_DATA).inventory();
         List<LogicalInventoryEntry> entries = entries();
@@ -294,7 +305,7 @@ public final class ContainerInventoryOverlay {
 
         graphics.fill(layout.panelX, layout.panelY, layout.panelX + layout.panelWidth, layout.panelY + layout.panelHeight, 0xF0C6C6C6);
         graphics.fill(layout.panelX + 2, layout.panelY + 2, layout.panelX + layout.panelWidth - 2, layout.panelY + layout.panelHeight - 2, 0xF0202020);
-        graphics.fill(layout.searchX, layout.searchY, layout.searchX + layout.searchWidth, layout.searchY + 18,
+        graphics.fill(layout.searchX, layout.searchY, layout.searchX + layout.searchWidth, layout.searchY + CONTROL_HEIGHT,
                 searchFocused ? 0xFF101010 : 0xFF282828);
         String shownQuery = query.isEmpty() && !searchFocused ? Component.translatable("gui.stacksnotslots.search_hint_compact").getString() : query;
         graphics.drawString(minecraft.font, minecraft.font.plainSubstrByWidth(shownQuery, layout.searchWidth - 7),
@@ -306,17 +317,15 @@ public final class ContainerInventoryOverlay {
 
         renderSquare(graphics, layout.categoryX, layout.controlsY, CategoryIcons.displayStack(currentCategory()), mouseX, mouseY,
                 "gui.stacksnotslots.category_control");
-        renderSquare(graphics, layout.modeX, layout.controlsY, configuredIcon(ClientConfig.VIEW_MODE_ICON.get()), mouseX, mouseY,
-                "gui.stacksnotslots.view_mode_control");
         renderTextSquare(graphics, layout.sortX, layout.controlsY, shortSortName(currentSort()), mouseX, mouseY,
                 "gui.stacksnotslots.sort_control");
-        if (inside(mouseX, mouseY, layout.categoryX, layout.controlsY, CONTROL_SIZE, CONTROL_SIZE)) hoveredCategory = currentCategory();
+        renderSquare(graphics, layout.transferX, layout.controlsY,
+                new ItemStack(Screen.hasShiftDown() ? Items.PISTON : Items.STICKY_PISTON), mouseX, mouseY,
+                Screen.hasShiftDown() ? "gui.stacksnotslots.dump_to_container" : "gui.stacksnotslots.extract_from_container");
+        if (inside(mouseX, mouseY, layout.categoryX, layout.controlsY, CONTROL_WIDTH, CONTROL_HEIGHT)) hoveredCategory = currentCategory();
 
-        if (ClientConfig.BROWSER_VIEW_MODE.get() == ClientConfig.BrowserViewMode.GRID) {
-            renderGrid(graphics, layout, entries, mouseX, mouseY);
-        } else {
-            renderList(graphics, layout, entries, mouseX, mouseY);
-        }
+        if (ClientConfig.BROWSER_VIEW_MODE.get() == ClientConfig.BrowserViewMode.GRID) renderGrid(graphics, layout, entries, mouseX, mouseY);
+        else renderList(graphics, layout, entries, mouseX, mouseY);
 
         long used = inventory.usedCapacity();
         long capacity = inventory.capacity();
@@ -327,6 +336,8 @@ public final class ContainerInventoryOverlay {
         graphics.fill(layout.panelX + 5, layout.capacityBarY, layout.panelX + 5 + barWidth, layout.capacityBarY + 5, 0xFF454545);
         graphics.fill(layout.panelX + 5, layout.capacityBarY, layout.panelX + 5 + filled, layout.capacityBarY + 5,
                 used > capacity ? 0xFFE34B4B : 0xFF54B45A);
+        renderTextSquare(graphics, layout.directionX, layout.bottomButtonY, arrow(ClientConfig.BROWSER_DOCK_SIDE.get()), mouseX, mouseY,
+                "gui.stacksnotslots.browser_direction");
         renderSquare(graphics, layout.manageX, layout.bottomButtonY, configuredIcon(ClientConfig.MANAGE_TABS_ICON.get()), mouseX, mouseY,
                 "gui.stacksnotslots.manage_tabs");
         renderSquare(graphics, layout.settingsX, layout.bottomButtonY, configuredIcon(ClientConfig.SETTINGS_ICON.get()), mouseX, mouseY,
@@ -380,25 +391,32 @@ public final class ContainerInventoryOverlay {
     }
 
     private static void renderHandle(GuiGraphics graphics, int mouseX, int mouseY) {
-        boolean hovered = inside(mouseX, mouseY, handleX, handleY, HANDLE_SIZE, HANDLE_SIZE);
-        graphics.fill(handleX, handleY, handleX + HANDLE_SIZE, handleY + HANDLE_SIZE, hovered ? 0xFFF0F0F0 : 0xFFC6C6C6);
-        graphics.fill(handleX + 2, handleY + 2, handleX + HANDLE_SIZE - 2, handleY + HANDLE_SIZE - 2, hovered ? 0xFF4F72A5 : 0xFF555555);
-        String arrow = dockRight(lastScreen) ? (open ? "<" : ">") : (open ? ">" : "<");
-        graphics.drawCenteredString(Minecraft.getInstance().font, arrow, handleX + HANDLE_SIZE / 2, handleY + 6, 0xFFFFFF);
+        boolean hovered = inside(mouseX, mouseY, handleX, handleY, HANDLE_WIDTH, HANDLE_HEIGHT);
+        graphics.fill(handleX, handleY, handleX + HANDLE_WIDTH, handleY + HANDLE_HEIGHT, hovered ? 0xFFF0F0F0 : 0xFFC6C6C6);
+        graphics.fill(handleX + 2, handleY + 2, handleX + HANDLE_WIDTH - 2, handleY + HANDLE_HEIGHT - 2,
+                open ? 0xFF356DA5 : hovered ? 0xFF777777 : 0xFF555555);
+        graphics.renderItem(configuredIcon(ClientConfig.BROWSER_HANDLE_ICON.get()), handleX + 2, handleY + 1);
+        if (dragging && ClientConfig.AUTO_BROWSER_DOCK_SIDE.getAsBoolean()) {
+            graphics.pose().pushPose();
+            graphics.pose().translate(0, 0, 300);
+            graphics.drawCenteredString(Minecraft.getInstance().font, arrow(ClientConfig.BROWSER_DOCK_SIDE.get()),
+                    handleX + HANDLE_WIDTH / 2, handleY + 5, 0xFFFFFF);
+            graphics.pose().popPose();
+        }
         if (hovered) hoveredControl = "gui.stacksnotslots.inventory_browser_drag";
     }
 
     private static void renderSquare(GuiGraphics graphics, int x, int y, ItemStack icon, int mouseX, int mouseY, String tooltip) {
-        boolean hovered = inside(mouseX, mouseY, x, y, CONTROL_SIZE, CONTROL_SIZE);
-        graphics.fill(x, y, x + CONTROL_SIZE, y + CONTROL_SIZE, hovered ? 0xFF7A7A7A : 0xFF555555);
-        graphics.renderItem(icon, x + 2, y + 2);
+        boolean hovered = inside(mouseX, mouseY, x, y, CONTROL_WIDTH, CONTROL_HEIGHT);
+        graphics.fill(x, y, x + CONTROL_WIDTH, y + CONTROL_HEIGHT, hovered ? 0xFF7A7A7A : 0xFF555555);
+        graphics.renderItem(icon, x + 2, y + 1);
         if (hovered && hoveredControl == null) hoveredControl = tooltip;
     }
 
     private static void renderTextSquare(GuiGraphics graphics, int x, int y, String text, int mouseX, int mouseY, String tooltip) {
-        boolean hovered = inside(mouseX, mouseY, x, y, CONTROL_SIZE, CONTROL_SIZE);
-        graphics.fill(x, y, x + CONTROL_SIZE, y + CONTROL_SIZE, hovered ? 0xFF7A7A7A : 0xFF555555);
-        graphics.drawCenteredString(Minecraft.getInstance().font, text, x + CONTROL_SIZE / 2, y + 6, 0xFFFFFF);
+        boolean hovered = inside(mouseX, mouseY, x, y, CONTROL_WIDTH, CONTROL_HEIGHT);
+        graphics.fill(x, y, x + CONTROL_WIDTH, y + CONTROL_HEIGHT, hovered ? 0xFF7A7A7A : 0xFF555555);
+        graphics.drawCenteredString(Minecraft.getInstance().font, text, x + CONTROL_WIDTH / 2, y + 5, 0xFFFFFF);
         if (hovered) hoveredControl = tooltip;
     }
 
@@ -409,11 +427,9 @@ public final class ContainerInventoryOverlay {
         if (ClientConfig.BROWSER_VIEW_MODE.get() == ClientConfig.BrowserViewMode.GRID) {
             int column = ((int)mouseX - layout.contentX) / GRID_CELL;
             int row = ((int)mouseY - layout.contentY) / GRID_CELL;
-            if (column >= ClientConfig.BROWSER_GRID_COLUMNS.getAsInt() || row >= ClientConfig.BROWSER_GRID_ROWS.getAsInt()) return null;
+            if (column >= ClientConfig.BROWSER_GRID_COLUMNS.getAsInt() || row >= layout.visibleEntryCount / ClientConfig.BROWSER_GRID_COLUMNS.getAsInt()) return null;
             offset = row * ClientConfig.BROWSER_GRID_COLUMNS.getAsInt() + column;
-        } else {
-            offset = ((int)mouseY - layout.contentY) / LIST_ROW;
-        }
+        } else offset = ((int)mouseY - layout.contentY) / LIST_ROW;
         List<LogicalInventoryEntry> entries = entries();
         int index = scroll + offset;
         return index >= 0 && index < entries.size() ? entries.get(index) : null;
@@ -434,7 +450,7 @@ public final class ContainerInventoryOverlay {
         cachedSort = sortMode;
         CategoryDefinition category = currentCategory();
         ArrayList<LogicalInventoryEntry> values = new ArrayList<>();
-        for (LogicalInventoryEntry entry : data.inventory().entries()) {
+        for (LogicalInventoryEntry entry : data.inventory().entriesAtOrAfter(36)) {
             if (category != null && !CategoryMatcher.matches(category, entry.representative())) continue;
             if (matchesSearch(entry.representative(), query)) values.add(entry);
         }
@@ -514,11 +530,41 @@ public final class ContainerInventoryOverlay {
         invalidateEntries();
     }
 
-    private static void toggleViewMode() {
-        ClientConfig.BrowserViewMode current = ClientConfig.BROWSER_VIEW_MODE.get();
-        ClientConfig.BROWSER_VIEW_MODE.set(current == ClientConfig.BrowserViewMode.GRID
-                ? ClientConfig.BrowserViewMode.LIST : ClientConfig.BrowserViewMode.GRID);
-        scroll = 0;
+    private static void cycleDockSide(Screen screen) {
+        ClientConfig.BrowserDockSide current = ClientConfig.BROWSER_DOCK_SIDE.get();
+        ClientConfig.BrowserDockSide[] sides = ClientConfig.BrowserDockSide.values();
+        ClientConfig.BROWSER_DOCK_SIDE.set(sides[(current.ordinal() + 1) % sides.length]);
+        refreshIngredientLayout(screen);
+    }
+
+    private static void chooseAutomaticSide(Screen screen) {
+        if (!ClientConfig.AUTO_BROWSER_DOCK_SIDE.getAsBoolean()) return;
+        double dx = handleX + HANDLE_WIDTH / 2.0 - screen.width / 2.0;
+        double dy = handleY + HANDLE_HEIGHT / 2.0 - screen.height / 2.0;
+        int deadX = ClientConfig.AUTO_DOCK_DEAD_ZONE_X.getAsInt();
+        int deadY = ClientConfig.AUTO_DOCK_DEAD_ZONE_Y.getAsInt();
+        if (Math.abs(dx) <= deadX && Math.abs(dy) <= deadY) return;
+        double horizontal = Math.max(0, Math.abs(dx) - deadX);
+        double vertical = Math.max(0, Math.abs(dy) - deadY);
+        ClientConfig.BrowserDockSide side = horizontal >= vertical
+                ? dx < 0 ? ClientConfig.BrowserDockSide.LEFT : ClientConfig.BrowserDockSide.RIGHT
+                : dy < 0 ? ClientConfig.BrowserDockSide.TOP : ClientConfig.BrowserDockSide.BOTTOM;
+        if (side != ClientConfig.BROWSER_DOCK_SIDE.get()) ClientConfig.BROWSER_DOCK_SIDE.set(side);
+    }
+
+    private static void setOpen(boolean value, Screen screen) {
+        open = value;
+        PacketDistributor.sendToServer(new BrowserStatePayload(value));
+        refreshIngredientLayout(screen);
+    }
+
+    /** Reinitialization makes JEI/EMI recompute exclusion geometry immediately after a layout change. */
+    private static void refreshIngredientLayout(Screen screen) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (screen == null || minecraft.screen != screen) return;
+        minecraft.execute(() -> {
+            if (minecraft.screen == screen) screen.resize(minecraft, screen.width, screen.height);
+        });
     }
 
     private static void invalidateEntries() { cachedRevision = -1; }
@@ -540,6 +586,15 @@ public final class ContainerInventoryOverlay {
         };
     }
 
+    private static String arrow(ClientConfig.BrowserDockSide side) {
+        return switch (side) {
+            case LEFT -> "<";
+            case RIGHT -> ">";
+            case TOP -> "^";
+            case BOTTOM -> "v";
+        };
+    }
+
     private static PanelLayout layout(AbstractContainerScreen<?> screen) {
         int width = panelWidth();
         int visibleCount;
@@ -547,47 +602,50 @@ public final class ContainerInventoryOverlay {
         int contentHeight;
         if (ClientConfig.BROWSER_VIEW_MODE.get() == ClientConfig.BrowserViewMode.GRID) {
             int columns = ClientConfig.BROWSER_GRID_COLUMNS.getAsInt();
-            int rows = Math.min(ClientConfig.BROWSER_GRID_ROWS.getAsInt(), Math.max(1, (screen.height - 103) / GRID_CELL));
+            int rows = Math.min(ClientConfig.BROWSER_GRID_ROWS.getAsInt(), Math.max(1, (screen.height - 99) / GRID_CELL));
             visibleCount = columns * rows;
             contentWidth = columns * GRID_CELL;
             contentHeight = rows * GRID_CELL;
         } else {
-            int rows = Math.min(Math.max(6, ClientConfig.BROWSER_GRID_ROWS.getAsInt()), Math.max(1, (screen.height - 103) / LIST_ROW));
+            int rows = Math.min(Math.max(6, ClientConfig.BROWSER_GRID_ROWS.getAsInt()), Math.max(1, (screen.height - 99) / LIST_ROW));
             visibleCount = rows;
             contentWidth = width - 8;
             contentHeight = rows * LIST_ROW;
         }
-        int height = 53 + contentHeight + 46;
-        int rawX = dockRight(screen) ? handleX + HANDLE_SIZE + 2 : handleX - width - 2;
+        int height = 95 + contentHeight;
+        ClientConfig.BrowserDockSide side = ClientConfig.BROWSER_DOCK_SIDE.get();
+        int rawX = switch (side) {
+            case LEFT -> handleX - width - 2;
+            case RIGHT -> handleX + HANDLE_WIDTH + 2;
+            case TOP, BOTTOM -> handleX + HANDLE_WIDTH / 2 - width / 2;
+        };
+        int rawY = switch (side) {
+            case TOP -> handleY - height - 2;
+            case BOTTOM -> handleY + HANDLE_HEIGHT + 2;
+            case LEFT, RIGHT -> handleY + HANDLE_HEIGHT / 2 - height / 2;
+        };
         int x = clamp(rawX, 2, Math.max(2, screen.width - width - 2));
-        int y = clamp(handleY + HANDLE_SIZE / 2 - height / 2, 2, Math.max(2, screen.height - height - 2));
+        int y = clamp(rawY, 2, Math.max(2, screen.height - height - 2));
         int controlsY = y + 27;
-        int categoryX = x + width - 64;
-        int modeX = x + width - 42;
-        int sortX = x + width - 20;
         int contentX = ClientConfig.BROWSER_VIEW_MODE.get() == ClientConfig.BrowserViewMode.GRID
                 ? x + (width - contentWidth) / 2 : x + 4;
-        int contentY = y + 51;
+        int contentY = y + 49;
         int capacityTextY = contentY + contentHeight + 3;
         int capacityBarY = capacityTextY + 11;
         int bottomY = capacityBarY + 7;
         return new PanelLayout(x, y, width, height, x + 4, y + 5, width - 8, controlsY,
-                categoryX, modeX, sortX, contentX, contentY, contentWidth, contentHeight, visibleCount,
-                capacityTextY, capacityBarY, x + 4, x + 26, bottomY);
+                x + 2, x + 24, x + width - 22, contentX, contentY, contentWidth, contentHeight, visibleCount,
+                capacityTextY, capacityBarY, x + 2, x + 24, x + width - 22, bottomY);
     }
 
     private static int panelWidth() {
         if (ClientConfig.BROWSER_VIEW_MODE.get() == ClientConfig.BrowserViewMode.LIST) return 170;
-        return Math.max(96, ClientConfig.BROWSER_GRID_COLUMNS.getAsInt() * GRID_CELL + 8);
+        return Math.max(68, ClientConfig.BROWSER_GRID_COLUMNS.getAsInt() * GRID_CELL + 8);
     }
 
     private static Rect2i panelBounds(AbstractContainerScreen<?> screen) {
         PanelLayout layout = layout(screen);
         return new Rect2i(layout.panelX, layout.panelY, layout.panelWidth, layout.panelHeight);
-    }
-
-    private static boolean dockRight(Screen screen) {
-        return screen == null || handleX + HANDLE_SIZE / 2 >= screen.width / 2;
     }
 
     private static void ensurePosition(Screen screen) {
@@ -601,12 +659,12 @@ public final class ContainerInventoryOverlay {
                     handleY = configuredY;
                 } else if (screen instanceof AbstractContainerScreen<?> container) {
                     handleX = container.getGuiLeft() + container.getXSize() + 2;
-                    handleY = container.getGuiTop() + container.getYSize() / 2 - HANDLE_SIZE / 2;
+                    handleY = container.getGuiTop() + container.getYSize() / 2 - HANDLE_HEIGHT / 2;
                 }
                 initializedPosition = true;
             }
-            handleX = clamp(handleX, 0, screen.width - HANDLE_SIZE);
-            handleY = clamp(handleY, 0, screen.height - HANDLE_SIZE);
+            handleX = clamp(handleX, 0, screen.width - HANDLE_WIDTH);
+            handleY = clamp(handleY, 0, screen.height - HANDLE_HEIGHT);
         }
     }
 
@@ -619,10 +677,44 @@ public final class ContainerInventoryOverlay {
     private record PanelLayout(
             int panelX, int panelY, int panelWidth, int panelHeight,
             int searchX, int searchY, int searchWidth, int controlsY,
-            int categoryX, int modeX, int sortX,
+            int categoryX, int sortX, int transferX,
             int contentX, int contentY, int contentWidth, int contentHeight, int visibleEntryCount,
-            int capacityTextY, int capacityBarY, int manageX, int settingsX, int bottomButtonY
+            int capacityTextY, int capacityBarY, int directionX, int manageX, int settingsX, int bottomButtonY
     ) {}
+
+    private static final class BrowserInputListener implements GuiEventListener {
+        private final AbstractContainerScreen<?> screen;
+        private boolean focused;
+
+        private BrowserInputListener(AbstractContainerScreen<?> screen) { this.screen = screen; }
+
+        @Override public boolean mouseClicked(double mouseX, double mouseY, int button) {
+            var slot = screen.getSlotUnderMouse();
+            if (button == 0 && Screen.hasControlDown() && slot != null && slot.container instanceof Inventory
+                    && slot.getContainerSlot() >= 0 && slot.getContainerSlot() < Inventory.INVENTORY_SIZE
+                    && !slot.getItem().isEmpty()) {
+                PacketDistributor.sendToServer(new StowSlotPayload(slot.getContainerSlot()));
+                return true;
+            }
+            return ContainerInventoryOverlay.mouseClicked(screen, mouseX, mouseY, button);
+        }
+
+        @Override public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+            return ContainerInventoryOverlay.mouseScrolled(screen, mouseX, mouseY, scrollY);
+        }
+
+        @Override public boolean isMouseOver(double mouseX, double mouseY) {
+            if (!ClientConfig.BROWSER_HANDLE_VISIBLE.getAsBoolean()) return false;
+            ensurePosition(screen);
+            if (inside(mouseX, mouseY, handleX, handleY, HANDLE_WIDTH, HANDLE_HEIGHT)) return true;
+            if (!open) return false;
+            Rect2i panel = panelBounds(screen);
+            return inside(mouseX, mouseY, panel.getX(), panel.getY(), panel.getWidth(), panel.getHeight());
+        }
+
+        @Override public void setFocused(boolean focused) { this.focused = focused; }
+        @Override public boolean isFocused() { return focused; }
+    }
 
     private static final class SearchIdentity {
         private final ItemStack stack;

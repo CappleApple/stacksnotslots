@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.netty.buffer.Unpooled;
 import java.util.List;
 import java.util.UUID;
+import com.cappleapple.stacksnotslots.inventory.ContainerTransfers;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -105,6 +106,31 @@ class InventoryPayloadCodecTest {
             BrowserTransferPayload decoded = BrowserTransferPayload.STREAM_CODEC.decode(buffer);
             assertSame(Items.DIRT, decoded.prototype().getItem());
             assertEquals(1, decoded.prototype().getCount());
+        } finally {
+            buffer.release();
+        }
+    }
+
+    @Test
+    void browserStateAndBulkTransfersRoundTrip() {
+        RegistryFriendlyByteBuf buffer = createBuffer();
+        try {
+            BrowserStatePayload.STREAM_CODEC.encode(buffer, new BrowserStatePayload(true));
+            BulkTransferPayload.STREAM_CODEC.encode(buffer, new BulkTransferPayload(
+                    BulkTransferPayload.Direction.FROM_CONTAINER, BulkTransferPayload.Target.LOOKED_AT));
+            BulkTransferResultPayload.STREAM_CODEC.encode(buffer, new BulkTransferResultPayload(
+                    BulkTransferPayload.Direction.TO_CONTAINER,
+                    List.of(new ContainerTransfers.TransferredStack(new ItemStack(Items.STONE), 130))));
+            buffer.readerIndex(0);
+
+            assertTrue(BrowserStatePayload.STREAM_CODEC.decode(buffer).open());
+            BulkTransferPayload request = BulkTransferPayload.STREAM_CODEC.decode(buffer);
+            assertEquals(BulkTransferPayload.Direction.FROM_CONTAINER, request.direction());
+            assertEquals(BulkTransferPayload.Target.LOOKED_AT, request.target());
+            BulkTransferResultPayload result = BulkTransferResultPayload.STREAM_CODEC.decode(buffer);
+            assertEquals(BulkTransferPayload.Direction.TO_CONTAINER, result.direction());
+            assertSame(Items.STONE, result.stacks().getFirst().prototype().getItem());
+            assertEquals(130, result.stacks().getFirst().quantity());
         } finally {
             buffer.release();
         }

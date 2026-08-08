@@ -24,9 +24,11 @@ Implemented:
 - In-game searchable category editor and reset-to-defaults operation
 - Most-restrictive overlapping world-pickup limits and rate-limited feedback
 - Category-only hotbar cycle bindings, remembered selections, cycling keybinds, and HUD feedback
-- Vanilla-first inventory UI with a collapsed-by-default, draggable browser for search, category projection, list/grid views, configurable counts, sorting, and capacity
+- Vanilla-first inventory UI with a collapsed-by-default, four-direction draggable browser for search, category projection, list/grid views, configurable counts, sorting, and capacity
 - Shared topmost browser on all container screens, with input scoped to the browser so modded container controls remain usable
-- JEI and EMI exclusion-area integrations so their ingredient lists avoid the expanded browser
+- Dynamic JEI and EMI exclusion areas so their ingredient lists reflow around the moved or expanded browser
+- Native quick-move integration for vanilla, Mouse Tweaks-style repeated clicks, and modded container screens
+- Bulk dump/extract controls for open menus and looked-at item-handler containers, with an optional world feedback grid
 - Server-authoritative inventory/category/hotbar packets with input validation and action rate limiting
 - NeoForge entity item-handler capability and public Java API
 - Capacity/debug/validation/category commands
@@ -61,17 +63,20 @@ Linux/macOS:
 ./gradlew runServer
 ```
 
-The built mod is written to `build/libs/stacksnotslots-0.4.0.jar`. The project uses official Mojang mappings with Parchment parameter names and ModDevGradle's Minecraft-aware JUnit support.
+The built mod is written to `build/libs/stacksnotslots-0.5.0.jar`. The project uses official Mojang mappings with Parchment parameter names and ModDevGradle's Minecraft-aware JUnit support.
 
 ## Player usage
 
-Open the normal inventory to see the familiar vanilla layout. Click the slim arrow handle to open the inventory browser. Hold and drag the handle anywhere over a container screen to reposition it; the browser opens on that side and renders above the underlying menu. Control-F toggles the handle and closes an open browser.
+Open the normal inventory to see the familiar vanilla layout. Click the spyglass handle to open the inventory browser. Hold and drag the handle anywhere over a container screen to reposition it; its blue state shows that the browser is open. The browser can open left, right, above, or below the handle and renders above the underlying menu. Control-F toggles the handle and closes an open browser.
 
 - Left-click an entry to move a legal stack to the cursor.
 - Right-click an entry to move half a legal stack to the cursor.
 - Press the normal drop key while hovering an entry to drop one; hold Control to drop a stack.
 - Control-left-click a visible player slot to stow that stack behind the vanilla window. Clicking the browser list while carrying a stack does the same.
 - With the browser closed, shift-clicking retains normal vanilla main-grid/hotbar/equipment behavior. With it open, shift-clicking a visible player stack stows it; shift-clicking a browser entry moves one backend stack into the first free main-grid slot, or does nothing when that grid is full.
+- In another container screen, an open browser redirects container-to-player shift-clicks into backend storage while player-to-container shift-clicks keep the menu's native behavior.
+- The sticky-piston browser button extracts an open container; hold Shift to turn it into a normal piston and dump the player inventory. Control-G and Control-H perform bulk dump/extract against the open menu or the container being looked at.
+- The draggable category icon above the vanilla grid scrolls categories without opening its popup. Hold Shift to turn it into a sticky piston and stow the 27-slot main grid without touching the hotbar.
 - Use **Manage Tabs** to add/edit/delete/reorder categories, assign a cycle category independently to each of the nine hotbar positions, and choose whether pickups may enter empty hotbar slots.
 - Selecting a category or sort mode performs one explicit arrangement of the main 27-slot grid. It displays one stack per distinct matching identity; subsequent placement is fully manual until another category or sort control is clicked.
 - Hotbar bindings never restrict placement or rearrange items automatically. The configurable forward/backward cycle keys explicitly swap the selected position with the next owned item in its assigned category.
@@ -121,13 +126,15 @@ Player customizations are persisted per player and are not overwritten when serv
 - `pickupLimitNotification` — `NONE`, `HUD`, `ACTION_BAR`, `SOUND`, or `HUD_AND_SOUND`
 - `enableSearchTooltipIndexing`
 - `enableHotbarCycleOverlay`
-- `browserDisplacesContainer` — shift the player inventory away from an open browser, default `false`
 - `browserViewMode` — `GRID` (default) or `LIST`
 - `browserGridColumns` / `browserGridRows` — default `4` by `6`
 - `browserItemCountMode` — `EXACT`, `COMPACT` (default), `STACKS`, `STACKS_REMAINDER`, or `PERCENTAGE`
 - `browserOverallCountMode` — `EXACT`, `COMPACT`, `STACKS` (default), or `PERCENTAGE`
-- `manageTabsIcon`, `settingsIcon`, and `viewModeIcon` — configurable item IDs for the square controls
+- `manageTabsIcon`, `settingsIcon`, and `browserHandleIcon` — configurable item IDs for the square controls and draggable handle
 - `browserHandleX`, `browserHandleY`, and `browserHandleVisible` — persisted floating-handle placement and visibility
+- `browserDockSide` / `autoChooseBrowserSide` — explicit four-direction docking and optional side selection while dragging
+- `autoSideDeadZoneX` / `autoSideDeadZoneY` — center-screen dead-zone half sizes for automatic docking
+- `showBulkTransferOverlay` / `bulkTransferOverlaySeconds` — in-world bulk-transfer feedback and duration
 
 ## Default preset schema
 
@@ -171,7 +178,7 @@ The public entry point is `com.cappleapple.stacksnotslots.api.StacksNotSlotsApi`
 - The complete dynamic inventory is exposed through NeoForge's player entity item-handler capabilities.
 - Empty compatibility positions are retained as sparse holes, so explicit vanilla/API slot placement remains stable across inventory changes and persistence.
 - Vanilla menus retain 36 projected item indices and real armor/offhand indices. The custom inventory/container panels provide access to entries outside that projection.
-- Shift-clicks from external containers into player storage use the dynamic logical append path. Player-owned main-grid/hotbar shift-clicks retain vanilla destination semantics whenever the browser is closed.
+- Shift-clicks from external containers use vanilla visible-slot behavior while the browser is closed and the dynamic backend path while it is open. Player-owned main-grid/hotbar shift-clicks retain vanilla destination semantics whenever the browser is closed.
 - Direct mutation of live vanilla projected stacks is reconciled each player tick and synchronized by revision.
 - The HUD hotbar reads the live projection instead of vanilla's stale public `items` list.
 - JEI and EMI receive the expanded browser as an exclusion area and can lay out their ingredient panels around it.

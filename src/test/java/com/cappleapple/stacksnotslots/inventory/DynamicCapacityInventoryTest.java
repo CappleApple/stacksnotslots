@@ -263,4 +263,47 @@ class DynamicCapacityInventoryTest {
         assertFalse(inventory.moveBackendStackToMain(new ItemStack(Items.APPLE)));
         assertTrue(inventory.validate());
     }
+
+    @Test
+    void backendEntriesExcludeEveryVisibleCompatibilityPosition() {
+        DynamicCapacityInventory inventory = new DynamicCapacityInventory(() -> 512);
+        inventory.replaceSyntheticSlot(0, new ItemStack(Items.APPLE, 2));
+        inventory.replaceSyntheticSlot(35, new ItemStack(Items.DIRT, 3));
+        inventory.replaceSyntheticSlot(36, new ItemStack(Items.STONE, 4));
+        inventory.replaceSyntheticSlot(40, new ItemStack(Items.STONE, 5));
+
+        assertEquals(1, inventory.entriesAtOrAfter(36).size());
+        assertEquals(Items.STONE, inventory.entriesAtOrAfter(36).getFirst().representative().getItem());
+        assertEquals(9, inventory.entriesAtOrAfter(36).getFirst().quantity());
+    }
+
+    @Test
+    void stowingMainGridPreservesAllHotbarPositions() {
+        DynamicCapacityInventory inventory = new DynamicCapacityInventory(() -> 512);
+        inventory.replaceSyntheticSlot(0, new ItemStack(Items.APPLE));
+        inventory.replaceSyntheticSlot(8, new ItemStack(Items.COAL));
+        inventory.replaceSyntheticSlot(9, new ItemStack(Items.DIRT));
+        inventory.replaceSyntheticSlot(35, new ItemStack(Items.STONE));
+
+        assertTrue(inventory.stowMainGrid());
+        assertEquals(Items.APPLE, inventory.syntheticStack(0).getItem());
+        assertEquals(Items.COAL, inventory.syntheticStack(8).getItem());
+        assertTrue(inventory.syntheticStack(9).isEmpty());
+        assertTrue(inventory.syntheticStack(35).isEmpty());
+        assertEquals(Items.DIRT, inventory.syntheticStack(36).getItem());
+        assertEquals(Items.STONE, inventory.syntheticStack(37).getItem());
+        assertTrue(inventory.validate());
+    }
+
+    @Test
+    void backendExtractionNeverConsumesVisibleCopiesOfTheSameIdentity() {
+        DynamicCapacityInventory inventory = new DynamicCapacityInventory(() -> 512);
+        inventory.replaceSyntheticSlot(9, new ItemStack(Items.STONE, 7));
+        inventory.replaceSyntheticSlot(36, new ItemStack(Items.STONE, 11));
+
+        assertEquals(11, inventory.extractAtOrAfter(new ItemStack(Items.STONE), 64, 36, false).extractedAmount());
+        assertEquals(7, inventory.syntheticStack(9).getCount());
+        assertTrue(inventory.syntheticStack(36).isEmpty());
+        assertTrue(inventory.validate());
+    }
 }

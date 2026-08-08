@@ -85,6 +85,20 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
         return cachedEntries;
     }
 
+    /** Aggregates only stacks at or beyond a compatibility index, used by backend-only browser views. */
+    public List<LogicalInventoryEntry> entriesAtOrAfter(int minimumSlot) {
+        Map<StackIdentity, Aggregate> aggregates = new LinkedHashMap<>();
+        for (int index = Math.max(0, minimumSlot); index < backingStacks.size(); index++) {
+            ItemStack stack = backingStacks.get(index);
+            if (stack.isEmpty()) continue;
+            StackIdentity key = new StackIdentity(stack);
+            aggregates.computeIfAbsent(key, ignored -> new Aggregate(stack.copyWithCount(1))).add(stack.getCount());
+        }
+        return aggregates.values().stream()
+                .map(value -> new LogicalInventoryEntry(value.representative, value.quantity, value.backingStackCount))
+                .toList();
+    }
+
     /** Returns defensive copies of the complete sparse compatibility-slot extent. */
     public List<ItemStack> backingStacks() {
         return backingStacks.stream().map(ItemStack::copy).toList();
@@ -214,6 +228,25 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
         return true;
     }
 
+    /** Stows every occupied vanilla main-grid position while preserving all hotbar positions. */
+    public boolean stowMainGrid() {
+        boolean moved = false;
+        ArrayList<ItemStack> values = new ArrayList<>();
+        for (int slot = 9; slot < Math.min(36, backingStacks.size()); slot++) {
+            ItemStack stack = backingStacks.get(slot);
+            if (stack.isEmpty()) continue;
+            values.add(stack);
+            backingStacks.set(slot, ItemStack.EMPTY);
+            moved = true;
+        }
+        if (!moved) return false;
+        for (ItemStack stack : values) addLegalStacks(stack, stack.getCount(), 36);
+        trimTrailingEmptySlots();
+        recalculateCapacity();
+        changed();
+        return true;
+    }
+
     /** Moves one matching backend stack into the first empty main-grid position, if both exist. */
     public boolean moveBackendStackToMain(ItemStack prototype) {
         if (prototype == null || prototype.isEmpty()) return false;
@@ -332,10 +365,15 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
 
     @Override
     public ExtractionResult extract(ItemStack prototype, int amount, boolean simulate) {
+        return extractAtOrAfter(prototype, amount, 0, simulate);
+    }
+
+    /** Extracts a matching identity without touching compatibility positions below {@code minimumSlot}. */
+    public ExtractionResult extractAtOrAfter(ItemStack prototype, int amount, int minimumSlot, boolean simulate) {
         if (prototype == null || prototype.isEmpty() || amount <= 0) return new ExtractionResult(Math.max(0, amount), 0, List.of());
         int remaining = amount;
         ArrayList<ItemStack> result = new ArrayList<>();
-        for (int index = 0; index < backingStacks.size() && remaining > 0; index++) {
+        for (int index = Math.max(0, minimumSlot); index < backingStacks.size() && remaining > 0; index++) {
             ItemStack stored = backingStacks.get(index);
             if (!ItemStack.isSameItemSameComponents(stored, prototype)) continue;
             int taken = Math.min(stored.getCount(), remaining);

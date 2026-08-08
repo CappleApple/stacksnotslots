@@ -5,7 +5,9 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "AbstractContainerMenuMixin",
+    "AbstractContainerMenuAccessor",
     "InventoryMixin",
+    "InventoryMenuMixin",
     "ItemEntityMixin",
     "PlayerMixin",
     "SlotMixin"

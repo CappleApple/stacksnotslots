@@ -26,8 +26,7 @@ public final class StacksNotSlotsJeiPlugin implements IModPlugin {
         registration.addGuiContainerHandler(AbstractContainerScreen.class, new IGuiContainerHandler<>() {
             @Override
             public List<Rect2i> getGuiExtraAreas(AbstractContainerScreen screen) {
-                Rect2i bounds = ContainerInventoryOverlay.currentBounds(screen);
-                return bounds.getWidth() == 0 ? List.of() : List.of(bounds);
+                return ContainerInventoryOverlay.currentAreas(screen);
             }
         });
     }

@@ -14,8 +14,9 @@ public final class StacksNotSlotsEmiPlugin implements EmiPlugin {
     @Override
     public void register(EmiRegistry registry) {
         registry.addExclusionArea(AbstractContainerScreen.class, (screen, consumer) -> {
-            Rect2i area = ContainerInventoryOverlay.currentBounds(screen);
-            if (area.getWidth() > 0) consumer.accept(new Bounds(area.getX(), area.getY(), area.getWidth(), area.getHeight()));
+            for (Rect2i area : ContainerInventoryOverlay.currentAreas(screen)) {
+                consumer.accept(new Bounds(area.getX(), area.getY(), area.getWidth(), area.getHeight()));
+            }
         });
     }
 }

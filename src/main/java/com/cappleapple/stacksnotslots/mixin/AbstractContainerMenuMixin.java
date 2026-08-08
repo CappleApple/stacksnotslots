@@ -1,8 +1,9 @@
 package com.cappleapple.stacksnotslots.mixin;
 
 import com.cappleapple.stacksnotslots.data.ModAttachments;
-import com.cappleapple.stacksnotslots.inventory.InsertionContext;
 import com.cappleapple.stacksnotslots.inventory.InventoryTransactions;
+import com.cappleapple.stacksnotslots.inventory.ContainerTransfers;
+import com.cappleapple.stacksnotslots.network.ModNetwork;
 import net.minecraft.core.NonNullList;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -28,6 +29,7 @@ public abstract class AbstractContainerMenuMixin {
     ) {
         Inventory playerInventory = sns$storageTarget(startIndex, endIndex);
         if (playerInventory == null
+                || (!ModNetwork.isBrowserOpen(playerInventory.player) && !ContainerTransfers.isBulkBackendRedirect(playerInventory.player))
                 || !playerInventory.player.getData(ModAttachments.PLAYER_DATA).migratedVanillaInventory()
                 || source.isEmpty()) return;
 
@@ -37,7 +39,7 @@ public abstract class AbstractContainerMenuMixin {
             // honor the exact destination range instead of treating it as external insertion.
             return;
         }
-        var insertion = InventoryTransactions.insert(playerInventory.player, source, InsertionContext.MANUAL_TRANSFER, false);
+        var insertion = InventoryTransactions.insertIntoBackend(playerInventory.player, source, false);
         if (!insertion.acceptedAnything()) {
             callback.setReturnValue(false);
             return;

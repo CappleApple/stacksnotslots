@@ -8,6 +8,7 @@ public final class ClientConfig {
     public enum BrowserViewMode { LIST, GRID }
     public enum ItemCountMode { EXACT, COMPACT, STACKS, STACKS_REMAINDER, PERCENTAGE }
     public enum OverallCountMode { EXACT, COMPACT, STACKS, PERCENTAGE }
+    public enum BrowserDockSide { LEFT, RIGHT, TOP, BOTTOM }
 
     public static final ModConfigSpec SPEC;
     public static final ModConfigSpec.EnumValue<CapacityDisplayMode> CAPACITY_DISPLAY_MODE;
@@ -16,7 +17,6 @@ public final class ClientConfig {
     public static final ModConfigSpec.BooleanValue HOTBAR_CYCLE_OVERLAY;
     public static final ModConfigSpec.IntValue CATEGORY_SELECTOR_X;
     public static final ModConfigSpec.IntValue CATEGORY_SELECTOR_Y;
-    public static final ModConfigSpec.BooleanValue BROWSER_DISPLACES_CONTAINER;
     public static final ModConfigSpec.EnumValue<BrowserViewMode> BROWSER_VIEW_MODE;
     public static final ModConfigSpec.IntValue BROWSER_GRID_COLUMNS;
     public static final ModConfigSpec.IntValue BROWSER_GRID_ROWS;
@@ -24,10 +24,16 @@ public final class ClientConfig {
     public static final ModConfigSpec.EnumValue<OverallCountMode> OVERALL_COUNT_MODE;
     public static final ModConfigSpec.ConfigValue<String> MANAGE_TABS_ICON;
     public static final ModConfigSpec.ConfigValue<String> SETTINGS_ICON;
-    public static final ModConfigSpec.ConfigValue<String> VIEW_MODE_ICON;
+    public static final ModConfigSpec.ConfigValue<String> BROWSER_HANDLE_ICON;
     public static final ModConfigSpec.IntValue BROWSER_HANDLE_X;
     public static final ModConfigSpec.IntValue BROWSER_HANDLE_Y;
     public static final ModConfigSpec.BooleanValue BROWSER_HANDLE_VISIBLE;
+    public static final ModConfigSpec.EnumValue<BrowserDockSide> BROWSER_DOCK_SIDE;
+    public static final ModConfigSpec.BooleanValue AUTO_BROWSER_DOCK_SIDE;
+    public static final ModConfigSpec.IntValue AUTO_DOCK_DEAD_ZONE_X;
+    public static final ModConfigSpec.IntValue AUTO_DOCK_DEAD_ZONE_Y;
+    public static final ModConfigSpec.BooleanValue BULK_TRANSFER_OVERLAY;
+    public static final ModConfigSpec.DoubleValue BULK_TRANSFER_OVERLAY_SECONDS;
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -39,7 +45,6 @@ public final class ClientConfig {
                 .defineInRange("categorySelectorX", 134, -256, 512);
         CATEGORY_SELECTOR_Y = builder.comment("Category selector Y offset from the vanilla inventory's top edge")
                 .defineInRange("categorySelectorY", 61, -256, 512);
-        BROWSER_DISPLACES_CONTAINER = builder.define("browserDisplacesContainer", false);
         BROWSER_VIEW_MODE = builder.defineEnum("browserViewMode", BrowserViewMode.GRID);
         BROWSER_GRID_COLUMNS = builder.defineInRange("browserGridColumns", 4, 1, 16);
         BROWSER_GRID_ROWS = builder.defineInRange("browserGridRows", 6, 1, 20);
@@ -47,10 +52,16 @@ public final class ClientConfig {
         OVERALL_COUNT_MODE = builder.defineEnum("browserOverallCountMode", OverallCountMode.STACKS);
         MANAGE_TABS_ICON = builder.define("manageTabsIcon", "minecraft:name_tag");
         SETTINGS_ICON = builder.define("settingsIcon", "minecraft:redstone");
-        VIEW_MODE_ICON = builder.define("viewModeIcon", "minecraft:spyglass");
+        BROWSER_HANDLE_ICON = builder.define("browserHandleIcon", "minecraft:spyglass");
         BROWSER_HANDLE_X = builder.defineInRange("browserHandleX", -1, -1, 16384);
         BROWSER_HANDLE_Y = builder.defineInRange("browserHandleY", -1, -1, 16384);
         BROWSER_HANDLE_VISIBLE = builder.define("browserHandleVisible", true);
+        BROWSER_DOCK_SIDE = builder.defineEnum("browserDockSide", BrowserDockSide.RIGHT);
+        AUTO_BROWSER_DOCK_SIDE = builder.define("autoChooseBrowserSide", true);
+        AUTO_DOCK_DEAD_ZONE_X = builder.defineInRange("autoSideDeadZoneX", 48, 0, 4096);
+        AUTO_DOCK_DEAD_ZONE_Y = builder.defineInRange("autoSideDeadZoneY", 36, 0, 4096);
+        BULK_TRANSFER_OVERLAY = builder.define("showBulkTransferOverlay", true);
+        BULK_TRANSFER_OVERLAY_SECONDS = builder.defineInRange("bulkTransferOverlaySeconds", 2.5D, 0.25D, 30.0D);
         SPEC = builder.build();
     }
 
