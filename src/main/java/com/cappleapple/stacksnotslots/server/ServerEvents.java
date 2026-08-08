@@ -15,7 +15,6 @@ import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
@@ -31,13 +30,6 @@ public final class ServerEvents {
         migrateVanillaInventory(player, data);
         CategoryPresetManager.initialize(data.categories());
         ModNetwork.sendInitial(player);
-    }
-
-    @SubscribeEvent
-    public static void playerTick(PlayerTickEvent.Post event) {
-        if (!event.getEntity().level().isClientSide) {
-            event.getEntity().getData(ModAttachments.PLAYER_DATA).inventory().reconcileExternalMutations();
-        }
     }
 
     @SubscribeEvent

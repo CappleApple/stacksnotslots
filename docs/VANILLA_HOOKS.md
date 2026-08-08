@@ -24,6 +24,12 @@ The redirect wraps only the call from `ItemEntity.playerTouch` to `Inventory.add
 
 Vanilla menu transfer logic splits source stacks before calling `Inventory.setItem`. The slot mixin reports a capacity-adjusted maximum for player item slots so the source is split by exactly the amount global capacity can accept. Existing stack capacity is credited when a slot is being replaced. Armor/offhand and non-player containers are untouched.
 
+## Menu shift-click mixins
+
+`AbstractContainerMenuMixin` recognizes destination ranges made entirely of vanilla player-storage slots and routes the source directly through the central insertion transaction. This allows chest, furnace, crafting-result, and modded-menu shift-clicks to append beyond the 36-slot projection whenever capacity remains.
+
+`InventoryMenuMixin` suppresses vanilla's main-inventory-to-hotbar shuffle because both ranges are views of the same collection. Shift-equipping armor/offhand and transfers from crafting/equipment slots remain active.
+
 ## Dynamic NeoForge view
 
 `DynamicItemHandler` is independent of vanilla's 36-index projection. It reports every occupied legal backing stack plus an append slot. Inserting through that final slot may grow the view, so the synthetic slot count can represent as many distinct stacks as capacity and JVM memory/indexing allow.

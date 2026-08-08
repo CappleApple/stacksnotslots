@@ -4,7 +4,9 @@
   "package": "com.cappleapple.stacksnotslots.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "AbstractContainerMenuMixin",
     "InventoryMixin",
+    "InventoryMenuMixin",
     "ItemEntityMixin",
     "SlotMixin"
   ],

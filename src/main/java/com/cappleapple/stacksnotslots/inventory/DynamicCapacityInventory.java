@@ -121,11 +121,18 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
         return -1;
     }
 
+    /** True only for the isolated live objects exposed to vanilla compatibility code. */
+    public boolean ownsReference(ItemStack candidate) {
+        if (candidate == null || candidate.isEmpty()) return false;
+        for (ItemStack stack : backingStacks) if (stack == candidate) return true;
+        return false;
+    }
+
     public void removeReference(ItemStack reference) {
         for (int i = 0; i < backingStacks.size(); i++) {
             if (backingStacks.get(i) != reference) continue;
-            ItemStack removed = backingStacks.remove(i);
-            usedCapacity = Math.max(0, usedCapacity - CapacityCosts.cost(removed, removed.getCount()));
+            backingStacks.remove(i);
+            recalculateCapacity();
             changed();
             return;
         }
@@ -189,11 +196,12 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
             ItemStack stored = backingStacks.get(index);
             if (!ItemStack.isSameItemSameComponents(stored, prototype)) continue;
             int taken = Math.min(stored.getCount(), remaining);
-            result.add(stored.copyWithCount(taken));
+            ItemStack extractedStack = stored.copyWithCount(taken);
+            result.add(extractedStack);
             remaining -= taken;
             if (!simulate) {
                 stored.shrink(taken);
-                usedCapacity = Math.max(0, usedCapacity - CapacityCosts.cost(stored, taken));
+                usedCapacity = Math.max(0, usedCapacity - CapacityCosts.cost(extractedStack, taken));
                 if (stored.isEmpty()) backingStacks.remove(index--);
             }
         }
@@ -238,11 +246,12 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
             return;
         }
         ItemStack previous = backingStacks.get(slot);
+        long actualUsedCapacity = calculateUsedCapacity();
         long previousCost = CapacityCosts.cost(previous, previous.getCount());
         long replacementCost = replacement.isEmpty() ? 0 : CapacityCosts.cost(replacement, replacement.getCount());
-        long projected = saturatedAdd(Math.max(0, usedCapacity - previousCost), replacementCost);
+        long projected = saturatedAdd(Math.max(0, actualUsedCapacity - previousCost), replacementCost);
         if (replacement.getCount() > replacement.getMaxStackSize()) throw new IllegalArgumentException("Synthetic slots must contain legal ItemStacks");
-        if (enforceCapacityIncrease && projected > capacity() && projected > usedCapacity) {
+        if (enforceCapacityIncrease && projected > capacity() && projected > actualUsedCapacity) {
             throw new IllegalArgumentException("Replacement exceeds inventory capacity");
         }
         if (replacement.isEmpty()) backingStacks.remove(slot);
@@ -285,8 +294,13 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
             normalized = true;
         }
         long currentHash = calculateHash();
-        if (normalized || currentHash != observedHash) {
-            recalculateCapacity();
+        long calculatedCapacity = calculateUsedCapacity();
+        boolean accountingMismatch = calculatedCapacity != usedCapacity;
+        if (normalized || currentHash != observedHash || accountingMismatch) {
+            if (accountingMismatch && !normalized && currentHash == observedHash) {
+                StacksNotSlots.LOGGER.warn("Self-repaired inventory capacity accounting from {} to {}", usedCapacity, calculatedCapacity);
+            }
+            usedCapacity = calculatedCapacity;
             changed();
         }
     }
@@ -402,8 +416,15 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
     }
 
     private void recalculateCapacity() {
-        usedCapacity = 0;
-        for (ItemStack stack : backingStacks) usedCapacity = saturatedAdd(usedCapacity, CapacityCosts.cost(stack, stack.getCount()));
+        usedCapacity = calculateUsedCapacity();
+    }
+
+    private long calculateUsedCapacity() {
+        long calculated = 0;
+        for (ItemStack stack : backingStacks) {
+            calculated = saturatedAdd(calculated, CapacityCosts.cost(stack, stack.getCount()));
+        }
+        return calculated;
     }
 
     private void changed() {

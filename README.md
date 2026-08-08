@@ -60,7 +60,7 @@ Linux/macOS:
 ./gradlew runServer
 ```
 
-The built mod is written to `build/libs/stacksnotslots-0.1.0.jar`. The project uses official Mojang mappings with Parchment parameter names and ModDevGradle's Minecraft-aware JUnit support.
+The built mod is written to `build/libs/stacksnotslots-0.1.1.jar`. The project uses official Mojang mappings with Parchment parameter names and ModDevGradle's Minecraft-aware JUnit support.
 
 ## Player usage
 
@@ -160,6 +160,7 @@ The public entry point is `com.cappleapple.stacksnotslots.api.StacksNotSlotsApi`
 
 - The complete dynamic inventory is exposed through NeoForge's player entity item-handler capabilities.
 - Vanilla menus retain 36 projected item indices and real armor/offhand indices. The custom inventory/container panels provide access to entries outside that projection.
+- Shift-clicks from containers into player storage use the dynamic logical append path; shifts between vanilla's main/hotbar projections are intentionally a no-op because no physical move exists.
 - Direct mutation of live vanilla projected stacks is reconciled each player tick and synchronized by revision.
 - Recipe matching accounts for all logical stacks. Some modded recipe-placement or inventory code that directly indexes `Inventory.items` may only observe vanilla's empty compatibility field.
 - Client UI classes are isolated behind the client-only mod entry point; the dedicated server smoke run loads no client package.

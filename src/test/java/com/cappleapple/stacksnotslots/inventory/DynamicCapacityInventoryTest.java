@@ -146,6 +146,8 @@ class DynamicCapacityInventoryTest {
         assertEquals(130, inventory.entries().getFirst().quantity());
         assertEquals(100, inventory.extract(new ItemStack(Items.COAL), 100, false).extractedAmount());
         assertEquals(30, inventory.entries().getFirst().quantity());
+        assertEquals(30, inventory.usedCapacity());
+        assertTrue(inventory.validate());
 
         RegistryAccess.Frozen access = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
         var saved = inventory.serializeNBT(access);
@@ -154,5 +156,45 @@ class DynamicCapacityInventoryTest {
         assertEquals(30, loaded.entries().getFirst().quantity());
         assertTrue(loaded.isOverCapacity());
         assertTrue(loaded.validate());
+    }
+
+    @Test
+    void extractingACompleteBackingStackReleasesItsCapacity() {
+        DynamicCapacityInventory inventory = new DynamicCapacityInventory(() -> 64);
+        inventory.insert(new ItemStack(Items.DIRT), false);
+        assertEquals(1, inventory.usedCapacity());
+        assertEquals(1, inventory.extract(new ItemStack(Items.DIRT), 1, false).extractedAmount());
+        assertEquals(0, inventory.usedCapacity());
+        assertTrue(inventory.entries().isEmpty());
+        assertTrue(inventory.validate());
+    }
+
+    @Test
+    void replacementRebasesAccountingAfterLiveSourceMutation() {
+        DynamicCapacityInventory inventory = new DynamicCapacityInventory(() -> 64);
+        inventory.insert(new ItemStack(Items.DIRT), false);
+        ItemStack liveReference = inventory.vanillaStackReference(0);
+        assertTrue(inventory.ownsReference(liveReference));
+        assertFalse(inventory.ownsReference(liveReference.copy()));
+        liveReference.shrink(1);
+        inventory.replaceSyntheticSlotFromItemUse(0, ItemStack.EMPTY);
+        assertEquals(0, inventory.usedCapacity());
+        assertTrue(inventory.entries().isEmpty());
+        assertTrue(inventory.validate());
+    }
+
+    @Test
+    void legacyProjectionMoveSequenceCannotInflateTheCapacityCache() {
+        DynamicCapacityInventory inventory = new DynamicCapacityInventory(() -> 64);
+        inventory.insert(new ItemStack(Items.DIRT), false);
+        ItemStack sourceReference = inventory.vanillaStackReference(0);
+        ItemStack moved = sourceReference.split(1);
+
+        inventory.insert(moved, false);
+        inventory.replaceSyntheticSlotFromItemUse(0, ItemStack.EMPTY);
+
+        assertEquals(1, inventory.entries().getFirst().quantity());
+        assertEquals(1, inventory.usedCapacity());
+        assertTrue(inventory.validate());
     }
 }

@@ -136,6 +136,11 @@ public abstract class InventoryMixin {
         callback.cancel();
     }
 
+    @Inject(method = "setChanged", at = @At("TAIL"))
+    private void sns$reconcileChangedSlot(CallbackInfo callback) {
+        if (sns$active()) sns$data().inventory().reconcileExternalMutations();
+    }
+
     @Inject(method = "getFreeSlot", at = @At("HEAD"), cancellable = true)
     private void sns$getFreeSlot(CallbackInfoReturnable<Integer> callback) {
         if (sns$active()) callback.setReturnValue(sns$data().inventory().syntheticSlotCount() < Inventory.INVENTORY_SIZE
