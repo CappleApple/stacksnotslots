@@ -24,7 +24,7 @@ public record InventorySnapshotPayload(UUID snapshotId, long revision, int chunk
                 throw new IllegalArgumentException("Invalid inventory snapshot framing");
             }
             ArrayList<ItemStack> stacks = new ArrayList<>(stackCount);
-            for (int i = 0; i < stackCount; i++) stacks.add(ItemStack.STREAM_CODEC.decode(buffer));
+            for (int i = 0; i < stackCount; i++) stacks.add(ItemStack.OPTIONAL_STREAM_CODEC.decode(buffer));
             return new InventorySnapshotPayload(id, revision, index, count, stacks);
         }
 
@@ -34,7 +34,7 @@ public record InventorySnapshotPayload(UUID snapshotId, long revision, int chunk
             buffer.writeVarInt(payload.chunkIndex());
             buffer.writeVarInt(payload.chunkCount());
             buffer.writeVarInt(payload.stacks().size());
-            payload.stacks().forEach(stack -> ItemStack.STREAM_CODEC.encode(buffer, stack));
+            payload.stacks().forEach(stack -> ItemStack.OPTIONAL_STREAM_CODEC.encode(buffer, stack));
         }
     };
 

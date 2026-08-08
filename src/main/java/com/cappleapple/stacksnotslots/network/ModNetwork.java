@@ -47,7 +47,7 @@ public final class ModNetwork {
     private ModNetwork() {}
 
     public static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar("1");
+        var registrar = event.registrar("2");
         registrar.playToClient(InventorySnapshotPayload.TYPE, InventorySnapshotPayload.STREAM_CODEC, ModNetwork::receiveSnapshot);
         registrar.playToClient(InventoryDeltaPayload.TYPE, InventoryDeltaPayload.STREAM_CODEC, ModNetwork::receiveDelta);
         registrar.playToClient(PlayerMetadataPayload.TYPE, PlayerMetadataPayload.STREAM_CODEC, ModNetwork::receiveMetadata);

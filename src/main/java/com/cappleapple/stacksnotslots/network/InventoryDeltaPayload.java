@@ -19,7 +19,7 @@ public record InventoryDeltaPayload(long baseRevision, long revision, int result
             int count = buffer.readVarInt();
             if (size < 0 || count < 0 || count > ModNetwork.MAX_DELTA_CHANGES) throw new IllegalArgumentException("Invalid inventory delta");
             ArrayList<SlotChange> changes = new ArrayList<>(count);
-            for (int i = 0; i < count; i++) changes.add(new SlotChange(buffer.readVarInt(), ItemStack.STREAM_CODEC.decode(buffer)));
+            for (int i = 0; i < count; i++) changes.add(new SlotChange(buffer.readVarInt(), ItemStack.OPTIONAL_STREAM_CODEC.decode(buffer)));
             return new InventoryDeltaPayload(base, revision, size, changes);
         }
 
@@ -30,7 +30,7 @@ public record InventoryDeltaPayload(long baseRevision, long revision, int result
             buffer.writeVarInt(payload.changes().size());
             for (SlotChange change : payload.changes()) {
                 buffer.writeVarInt(change.index());
-                ItemStack.STREAM_CODEC.encode(buffer, change.stack());
+                ItemStack.OPTIONAL_STREAM_CODEC.encode(buffer, change.stack());
             }
         }
     };
