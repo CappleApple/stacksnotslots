@@ -59,6 +59,6 @@ Return a positive per-item cost when applicable and `-1` to defer. Higher priori
 
 ## NeoForge capability
 
-Query `Capabilities.ItemHandler.ENTITY` on a player for the dynamic compatibility view. Occupied indices map to legal backing stacks, and the last index is an append slot. `getSlots()` therefore grows after inserting a new distinct/legal backing stack. Never cache the reported slot count as a capacity limit.
+Query `Capabilities.ItemHandler.ENTITY` on a player for the dynamic compatibility view. Indices are stable sparse compatibility positions: an emptied interior index remains empty rather than shifting every later stack, and the last index is an append slot. Slot-specific insert/replace calls affect the requested index. `getSlots()` grows as needed and must never be cached as a capacity limit.
 
 The handler is a view over the same authoritative collection. Simulation, extraction, and stack limits obey the central inventory rules.

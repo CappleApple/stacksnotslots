@@ -34,8 +34,8 @@ public final class DynamicItemHandler implements IItemHandlerModifiable {
         ItemStack existing = inventory.syntheticStack(slot);
         if (!existing.isEmpty() && !ItemStack.isSameItemSameComponents(existing, stack)) return stack;
         InsertionResult result = player == null
-                ? inventory.insert(stack, simulate)
-                : InventoryTransactions.insert(player, stack, InsertionContext.MANUAL_TRANSFER, simulate);
+                ? inventory.insertIntoSyntheticSlot(stack, slot, simulate)
+                : InventoryTransactions.insertIntoSyntheticSlot(player, stack, slot, simulate);
         return result.remainder();
     }
 

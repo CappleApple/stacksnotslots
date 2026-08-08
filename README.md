@@ -11,7 +11,7 @@ There is no hidden compatibility-slot ceiling below capacity. If a player has ca
 Implemented:
 
 - Dynamic logical inventory with no configured backing-slot maximum
-- One dynamically indexed compatibility slot per legal backing stack, plus an append slot
+- Sparse, dynamically indexed compatibility slots that retain explicit placement, plus an append slot
 - Runtime capacity attribute and normal Minecraft attribute-modifier support
 - Integer capacity costs with a public override registry
 - Transactional simulated/real partial insertion and extraction
@@ -24,7 +24,8 @@ Implemented:
 - In-game searchable category editor and reset-to-defaults operation
 - Most-restrictive overlapping world-pickup limits and rate-limited feedback
 - Exact-item and category hotbar bindings, remembered selections, cycling keybinds, and HUD feedback
-- Widened inventory UI with aggregated quantities, virtualized scrolling, search, sorting, tabs, and capacity display
+- Vanilla-first inventory UI with a collapsed-by-default, animated browser drawer for search, category projection, sorting, aggregated quantities, and capacity
+- JEI and EMI exclusion-area integrations so their ingredient lists avoid the expanded browser drawer
 - Unified-inventory side panel on ordinary container screens
 - Server-authoritative inventory/category/hotbar packets with input validation and action rate limiting
 - NeoForge entity item-handler capability and public Java API
@@ -60,17 +61,18 @@ Linux/macOS:
 ./gradlew runServer
 ```
 
-The built mod is written to `build/libs/stacksnotslots-0.1.1.jar`. The project uses official Mojang mappings with Parchment parameter names and ModDevGradle's Minecraft-aware JUnit support.
+The built mod is written to `build/libs/stacksnotslots-0.2.0.jar`. The project uses official Mojang mappings with Parchment parameter names and ModDevGradle's Minecraft-aware JUnit support.
 
 ## Player usage
 
-Open the normal inventory to see the crafting/equipment area beside the unified inventory panel. The panel displays each stack-compatible identity once with its total quantity.
+Open the normal inventory to see the familiar vanilla layout. Use the slim `>` tab on its right edge to open the inventory-browser drawer. The drawer displays each stack-compatible identity once with its total quantity and slides closed again with `<`.
 
 - Left-click an entry to move a legal stack to the cursor.
 - Right-click an entry to move half a legal stack to the cursor.
 - Press the normal drop key while hovering an entry to drop one; hold Control to drop a stack.
 - Shift-click an entry to bind its exact item to the currently selected hotbar position.
 - Use **Manage Tabs** to add/edit/delete/reorder categories. The **B** button binds a category to the selected hotbar position.
+- Selecting a category or sort mode projects only that ordered view into the vanilla main-inventory grid; ordinary insertion/removal does not compact explicitly placed slots.
 - Use the configurable forward/backward cycle keys to change the active item in a category-bound hotbar position.
 - Container screens show a scrollable unified-inventory panel; take any logical entry to the cursor and place it into the container normally.
 
@@ -159,9 +161,12 @@ The public entry point is `com.cappleapple.stacksnotslots.api.StacksNotSlotsApi`
 ## Compatibility notes
 
 - The complete dynamic inventory is exposed through NeoForge's player entity item-handler capabilities.
+- Empty compatibility positions are retained as sparse holes, so explicit vanilla/API slot placement remains stable across inventory changes and persistence.
 - Vanilla menus retain 36 projected item indices and real armor/offhand indices. The custom inventory/container panels provide access to entries outside that projection.
 - Shift-clicks from containers into player storage use the dynamic logical append path; shifts between vanilla's main/hotbar projections are intentionally a no-op because no physical move exists.
 - Direct mutation of live vanilla projected stacks is reconciled each player tick and synchronized by revision.
+- The HUD hotbar reads the live projection instead of vanilla's stale public `items` list.
+- JEI and EMI receive the expanded drawer as an exclusion area and can lay out their ingredient panels around it.
 - Recipe matching accounts for all logical stacks. Some modded recipe-placement or inventory code that directly indexes `Inventory.items` may only observe vanilla's empty compatibility field.
 - Client UI classes are isolated behind the client-only mod entry point; the dedicated server smoke run loads no client package.
 

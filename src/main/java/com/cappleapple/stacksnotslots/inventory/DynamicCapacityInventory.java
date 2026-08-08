@@ -22,11 +22,12 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.common.util.INBTSerializable;
 
 /**
- * The authoritative collection. Backing stacks are always legal vanilla stacks, but their list has no
- * gameplay-defined maximum. Capacity is the sole insertion limit.
+ * The authoritative collection. Occupied backing entries are always legal vanilla stacks, while empty
+ * entries retain explicit compatibility-slot placement. The indexed extent has no gameplay-defined maximum;
+ * capacity is the sole insertion limit.
  */
 public final class DynamicCapacityInventory implements ICapacityInventory, INBTSerializable<CompoundTag> {
-    public static final int DATA_VERSION = 1;
+    public static final int DATA_VERSION = 2;
     private final ArrayList<ItemStack> backingStacks = new ArrayList<>();
     private final LongSupplier capacitySupplier;
     private final Runnable mutationListener;
@@ -73,6 +74,7 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
         if (cachedEntriesRevision == revision) return cachedEntries;
         Map<StackIdentity, Aggregate> aggregates = new LinkedHashMap<>();
         for (ItemStack stack : backingStacks) {
+            if (stack.isEmpty()) continue;
             StackIdentity key = new StackIdentity(stack);
             aggregates.computeIfAbsent(key, ignored -> new Aggregate(stack.copyWithCount(1))).add(stack.getCount());
         }
@@ -83,12 +85,12 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
         return cachedEntries;
     }
 
-    /** Returns defensive copies of every legal backing stack. */
+    /** Returns defensive copies of the complete sparse compatibility-slot extent. */
     public List<ItemStack> backingStacks() {
         return backingStacks.stream().map(ItemStack::copy).toList();
     }
 
-    /** Number of occupied synthetic slots. This grows with the represented collection and has no fixed ceiling. */
+    /** Indexed synthetic-slot extent. It grows dynamically and has no fixed ceiling. */
     public int syntheticSlotCount() {
         return backingStacks.size();
     }
@@ -96,6 +98,15 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
     /** Occupied slots plus one append slot, unless the JVM list index space itself is exhausted. */
     public int compatibilitySlotCount() {
         return backingStacks.size() == Integer.MAX_VALUE ? Integer.MAX_VALUE : backingStacks.size() + 1;
+    }
+
+    /** First empty compatibility slot below a caller-provided exclusive limit, or {@code -1}. */
+    public int firstEmptySyntheticSlot(int limitExclusive) {
+        int limit = Math.max(0, limitExclusive);
+        for (int slot = 0; slot < Math.min(backingStacks.size(), limit); slot++) {
+            if (backingStacks.get(slot) == ItemStack.EMPTY) return slot;
+        }
+        return backingStacks.size() < limit ? backingStacks.size() : -1;
     }
 
     public ItemStack syntheticStack(int slot) {
@@ -116,6 +127,7 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
         if (prototype.isEmpty()) return -1;
         for (int i = 0; i < backingStacks.size(); i++) {
             ItemStack stack = backingStacks.get(i);
+            if (stack.isEmpty()) continue;
             if (stack == prototype || ItemStack.isSameItemSameComponents(stack, prototype)) return i;
         }
         return -1;
@@ -131,7 +143,8 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
     public void removeReference(ItemStack reference) {
         for (int i = 0; i < backingStacks.size(); i++) {
             if (backingStacks.get(i) != reference) continue;
-            backingStacks.remove(i);
+            backingStacks.set(i, ItemStack.EMPTY);
+            trimTrailingEmptySlots();
             recalculateCapacity();
             changed();
             return;
@@ -139,7 +152,7 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
     }
 
     public List<ItemStack> drain() {
-        List<ItemStack> drained = backingStacks();
+        List<ItemStack> drained = backingStacks.stream().filter(stack -> !stack.isEmpty()).map(ItemStack::copy).toList();
         clear();
         return drained;
     }
@@ -147,6 +160,7 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
     public void tick(Player player) {
         for (int i = 0; i < backingStacks.size(); i++) {
             ItemStack stack = backingStacks.get(i);
+            if (stack.isEmpty()) continue;
             stack.inventoryTick(player.level(), player, i, i == player.getInventory().selected);
         }
         reconcileExternalMutations();
@@ -187,6 +201,35 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
         return new InsertionResult(stack.getCount(), accepted, remainder, limited.capacityConsumed(), reason);
     }
 
+    /** Inserts only into the requested compatibility slot, preserving explicit API and GUI placement. */
+    public InsertionResult insertIntoSyntheticSlot(ItemStack stack, int slot, boolean simulate) {
+        if (stack == null || stack.isEmpty() || stack.getCount() <= 0 || slot < 0) {
+            return rejected(stack == null ? ItemStack.EMPTY : stack, stack == null ? 0 : Math.max(0, stack.getCount()),
+                    InsertionRejection.INVALID_ITEM);
+        }
+        ItemStack existing = slot < backingStacks.size() ? backingStacks.get(slot) : ItemStack.EMPTY;
+        if (!existing.isEmpty() && !ItemStack.isSameItemSameComponents(existing, stack)) {
+            return rejected(stack, stack.getCount(), InsertionRejection.INVALID_ITEM);
+        }
+        int stackSpace = existing.isEmpty()
+                ? stack.getMaxStackSize()
+                : existing.getMaxStackSize() - existing.getCount();
+        long available = capacity() - usedCapacity;
+        if (available < 0) return rejected(stack, stack.getCount(), InsertionRejection.OVER_CAPACITY);
+        int accepted = (int)Math.min(stack.getCount(), Math.min(stackSpace, available / CapacityCosts.unitCost(stack)));
+        if (accepted <= 0) return rejected(stack, stack.getCount(), InsertionRejection.GLOBAL_CAPACITY);
+        if (!simulate) {
+            ensureSyntheticSlot(slot);
+            if (existing.isEmpty()) backingStacks.set(slot, stack.copyWithCount(accepted));
+            else existing.grow(accepted);
+            usedCapacity = saturatedAdd(usedCapacity, CapacityCosts.cost(stack, accepted));
+            changed();
+        }
+        ItemStack remainder = accepted == stack.getCount() ? ItemStack.EMPTY : stack.copyWithCount(stack.getCount() - accepted);
+        InsertionRejection rejection = accepted == stack.getCount() ? InsertionRejection.NONE : InsertionRejection.GLOBAL_CAPACITY;
+        return new InsertionResult(stack.getCount(), accepted, remainder, CapacityCosts.cost(stack, accepted), rejection);
+    }
+
     @Override
     public ExtractionResult extract(ItemStack prototype, int amount, boolean simulate) {
         if (prototype == null || prototype.isEmpty() || amount <= 0) return new ExtractionResult(Math.max(0, amount), 0, List.of());
@@ -202,23 +245,28 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
             if (!simulate) {
                 stored.shrink(taken);
                 usedCapacity = Math.max(0, usedCapacity - CapacityCosts.cost(extractedStack, taken));
-                if (stored.isEmpty()) backingStacks.remove(index--);
+                if (stored.isEmpty()) backingStacks.set(index, ItemStack.EMPTY);
             }
         }
         int extracted = amount - remaining;
-        if (!simulate && extracted > 0) changed();
+        if (!simulate && extracted > 0) {
+            trimTrailingEmptySlots();
+            changed();
+        }
         return new ExtractionResult(amount, extracted, result);
     }
 
     public ItemStack extractSyntheticSlot(int slot, int amount, boolean simulate) {
         if (slot < 0 || slot >= backingStacks.size() || amount <= 0) return ItemStack.EMPTY;
         ItemStack stored = backingStacks.get(slot);
+        if (stored.isEmpty()) return ItemStack.EMPTY;
         int taken = Math.min(amount, stored.getCount());
         ItemStack result = stored.copyWithCount(taken);
         if (!simulate) {
             stored.shrink(taken);
             usedCapacity = Math.max(0, usedCapacity - CapacityCosts.cost(result, taken));
-            if (stored.isEmpty()) backingStacks.remove(slot);
+            if (stored.isEmpty()) backingStacks.set(slot, ItemStack.EMPTY);
+            trimTrailingEmptySlots();
             changed();
         }
         return result;
@@ -238,24 +286,21 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
     }
 
     private void replaceSyntheticSlot(int slot, ItemStack replacement, boolean enforceCapacityIncrease) {
-        if (slot < 0 || slot > backingStacks.size()) throw new IndexOutOfBoundsException("Synthetic slot " + slot);
-        if (slot == backingStacks.size()) {
-            if (replacement.isEmpty()) return;
-            InsertionResult inserted = insert(replacement, false);
-            if (!inserted.acceptedAll()) throw new IllegalArgumentException("Replacement exceeds inventory capacity");
-            return;
-        }
-        ItemStack previous = backingStacks.get(slot);
+        if (slot < 0) throw new IndexOutOfBoundsException("Synthetic slot " + slot);
+        if (replacement == null) replacement = ItemStack.EMPTY;
+        if (replacement.isEmpty() && slot >= backingStacks.size()) return;
+        ItemStack previous = slot < backingStacks.size() ? backingStacks.get(slot) : ItemStack.EMPTY;
         long actualUsedCapacity = calculateUsedCapacity();
-        long previousCost = CapacityCosts.cost(previous, previous.getCount());
+        long previousCost = previous.isEmpty() ? 0 : CapacityCosts.cost(previous, previous.getCount());
         long replacementCost = replacement.isEmpty() ? 0 : CapacityCosts.cost(replacement, replacement.getCount());
         long projected = saturatedAdd(Math.max(0, actualUsedCapacity - previousCost), replacementCost);
         if (replacement.getCount() > replacement.getMaxStackSize()) throw new IllegalArgumentException("Synthetic slots must contain legal ItemStacks");
         if (enforceCapacityIncrease && projected > capacity() && projected > actualUsedCapacity) {
             throw new IllegalArgumentException("Replacement exceeds inventory capacity");
         }
-        if (replacement.isEmpty()) backingStacks.remove(slot);
-        else backingStacks.set(slot, replacement.copy());
+        ensureSyntheticSlot(slot);
+        backingStacks.set(slot, replacement.isEmpty() ? ItemStack.EMPTY : replacement.copy());
+        trimTrailingEmptySlots();
         usedCapacity = projected;
         changed();
     }
@@ -284,15 +329,23 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
 
     /** Detects item-use and durability mutations made through live vanilla stack references. */
     public void reconcileExternalMutations() {
-        boolean normalized = backingStacks.removeIf(ItemStack::isEmpty);
+        boolean normalized = false;
         for (int i = 0; i < backingStacks.size(); i++) {
             ItemStack stack = backingStacks.get(i);
+            if (stack.isEmpty()) {
+                if (stack != ItemStack.EMPTY) {
+                    backingStacks.set(i, ItemStack.EMPTY);
+                    normalized = true;
+                }
+                continue;
+            }
             if (stack.getCount() <= stack.getMaxStackSize()) continue;
             int excess = stack.getCount() - stack.getMaxStackSize();
             stack.setCount(stack.getMaxStackSize());
             addLegalStacks(stack, excess);
             normalized = true;
         }
+        normalized |= trimTrailingEmptySlots();
         long currentHash = calculateHash();
         long calculatedCapacity = calculateUsedCapacity();
         boolean accountingMismatch = calculatedCapacity != usedCapacity;
@@ -315,8 +368,9 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
         long calculated = 0;
         for (int index = 0; index < backingStacks.size(); index++) {
             ItemStack stack = backingStacks.get(index);
-            if (stack.isEmpty() || stack.getCount() <= 0) {
-                errors.add("Backing index " + index + " is empty or non-positive");
+            if (stack.isEmpty()) continue;
+            if (stack.getCount() <= 0) {
+                errors.add("Backing index " + index + " is non-positive");
                 continue;
             }
             if (stack.getCount() > stack.getMaxStackSize()) {
@@ -331,7 +385,8 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
 
     public void loadNetworkSnapshot(List<ItemStack> stacks, long serverRevision) {
         backingStacks.clear();
-        for (ItemStack stack : stacks) addDeserialized(stack);
+        for (ItemStack stack : stacks) backingStacks.add(stack.isEmpty() ? ItemStack.EMPTY : stack.copy());
+        trimTrailingEmptySlots();
         revision = Math.max(0, serverRevision);
         recalculateCapacity();
         observedHash = calculateHash();
@@ -347,7 +402,7 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
             backingStacks.set(index, change.getValue().copy());
         }
         while (backingStacks.size() > resultingSize) backingStacks.removeLast();
-        if (backingStacks.stream().anyMatch(ItemStack::isEmpty)) return false;
+        trimTrailingEmptySlots();
         revision = Math.max(0, serverRevision);
         recalculateCapacity();
         observedHash = calculateHash();
@@ -360,7 +415,13 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
         CompoundTag root = new CompoundTag();
         root.putInt("Version", DATA_VERSION);
         ListTag items = new ListTag();
-        for (ItemStack stack : backingStacks) items.add(stack.save(provider, new CompoundTag()));
+        for (int slot = 0; slot < backingStacks.size(); slot++) {
+            ItemStack stack = backingStacks.get(slot);
+            if (stack.isEmpty()) continue;
+            CompoundTag encoded = (CompoundTag)stack.save(provider, new CompoundTag());
+            encoded.putInt("SNS_Slot", slot);
+            items.add(encoded);
+        }
         for (int i = 0; i < unresolvedEntries.size(); i++) items.add(unresolvedEntries.getCompound(i).copy());
         root.put("Items", items);
         root.putLong("Revision", revision);
@@ -371,16 +432,23 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
     public void deserializeNBT(HolderLookup.Provider provider, CompoundTag root) {
         backingStacks.clear();
         unresolvedEntries = new ListTag();
+        int version = root.getInt("Version");
         ListTag items = root.getList("Items", CompoundTag.TAG_COMPOUND);
         for (int i = 0; i < items.size(); i++) {
             CompoundTag encoded = items.getCompound(i);
-            ItemStack.parse(provider, encoded).ifPresentOrElse(this::addDeserialized, () -> {
+            int savedSlot = version >= 2 && encoded.contains("SNS_Slot", CompoundTag.TAG_INT)
+                    ? encoded.getInt("SNS_Slot") : -1;
+            ItemStack.parse(provider, encoded).ifPresentOrElse(stack -> {
+                if (savedSlot >= 0) restoreAt(savedSlot, stack);
+                else addDeserialized(stack);
+            }, () -> {
                 unresolvedEntries.add(encoded.copy());
                 StacksNotSlots.LOGGER.warn("Preserving unresolved inventory entry during load: {}", encoded);
             });
         }
         revision = Math.max(0, root.getLong("Revision"));
         recalculateCapacity();
+        trimTrailingEmptySlots();
         observedHash = calculateHash();
         invalidateEntryCache();
     }
@@ -395,11 +463,24 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
         }
     }
 
+    private void restoreAt(int slot, ItemStack stack) {
+        if (stack.isEmpty()) return;
+        int remaining = stack.getCount();
+        int target = slot;
+        while (remaining > 0) {
+            ensureSyntheticSlot(target);
+            int amount = Math.min(remaining, stack.getMaxStackSize());
+            backingStacks.set(target++, stack.copyWithCount(amount));
+            remaining -= amount;
+        }
+    }
+
     private void addLegalStacks(ItemStack incoming, int amount) {
         int remaining = amount;
         if (incoming.isStackable()) {
             for (ItemStack stored : backingStacks) {
                 if (remaining == 0) break;
+                if (stored.isEmpty()) continue;
                 if (!ItemStack.isSameItemSameComponents(stored, incoming)) continue;
                 int moved = Math.min(remaining, stored.getMaxStackSize() - stored.getCount());
                 if (moved > 0) {
@@ -410,9 +491,31 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
         }
         while (remaining > 0) {
             int moved = Math.min(remaining, incoming.getMaxStackSize());
-            backingStacks.add(incoming.copyWithCount(moved));
+            int vacant = firstCanonicalEmptySlot();
+            if (vacant < 0) backingStacks.add(incoming.copyWithCount(moved));
+            else backingStacks.set(vacant, incoming.copyWithCount(moved));
             remaining -= moved;
         }
+    }
+
+    /** Avoids reusing a live reference that vanilla has temporarily shrunk to zero mid-transaction. */
+    private int firstCanonicalEmptySlot() {
+        for (int slot = 0; slot < backingStacks.size(); slot++) {
+            if (backingStacks.get(slot) == ItemStack.EMPTY) return slot;
+        }
+        return -1;
+    }
+
+    private void ensureSyntheticSlot(int slot) {
+        if (slot < 0 || slot == Integer.MAX_VALUE) throw new IndexOutOfBoundsException("Synthetic slot " + slot);
+        backingStacks.ensureCapacity(slot + 1);
+        while (backingStacks.size() <= slot) backingStacks.add(ItemStack.EMPTY);
+    }
+
+    private boolean trimTrailingEmptySlots() {
+        int previousSize = backingStacks.size();
+        while (!backingStacks.isEmpty() && backingStacks.getLast().isEmpty()) backingStacks.removeLast();
+        return backingStacks.size() != previousSize;
     }
 
     private void recalculateCapacity() {
@@ -422,6 +525,7 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
     private long calculateUsedCapacity() {
         long calculated = 0;
         for (ItemStack stack : backingStacks) {
+            if (stack.isEmpty()) continue;
             calculated = saturatedAdd(calculated, CapacityCosts.cost(stack, stack.getCount()));
         }
         return calculated;

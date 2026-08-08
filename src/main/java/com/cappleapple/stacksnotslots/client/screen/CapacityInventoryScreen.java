@@ -4,24 +4,28 @@ import com.cappleapple.stacksnotslots.api.LogicalInventoryEntry;
 import com.cappleapple.stacksnotslots.category.CategoryDefinition;
 import com.cappleapple.stacksnotslots.category.CategoryMatcher;
 import com.cappleapple.stacksnotslots.category.SortMode;
+import com.cappleapple.stacksnotslots.config.ClientConfig;
 import com.cappleapple.stacksnotslots.data.ModAttachments;
 import com.cappleapple.stacksnotslots.data.PlayerInventoryData;
-import com.cappleapple.stacksnotslots.network.InventoryActionPayload;
-import com.cappleapple.stacksnotslots.network.HotbarBindPayload;
-import com.cappleapple.stacksnotslots.network.InventoryViewPreferencesPayload;
 import com.cappleapple.stacksnotslots.hotbar.BindingType;
-import com.cappleapple.stacksnotslots.config.ClientConfig;
+import com.cappleapple.stacksnotslots.network.HotbarBindPayload;
+import com.cappleapple.stacksnotslots.network.InventoryActionPayload;
+import com.cappleapple.stacksnotslots.network.InventoryViewPreferencesPayload;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -31,113 +35,218 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.neoforged.neoforge.network.PacketDistributor;
 
+/** Vanilla-first inventory screen with an optional dynamic inventory-browser drawer. */
 public final class CapacityInventoryScreen extends InventoryScreen {
-    private static final int VANILLA_WIDTH = 176;
-    private static final int PANEL_X = 182;
-    private static final int PANEL_WIDTH = 244;
-    private static final int ROW_Y = 34;
-    private static final int ROW_HEIGHT = 18;
-    private static final int VISIBLE_ROWS = 6;
+    private static final int VANILLA_WIDTH = InventoryDrawerLayout.VANILLA_WIDTH;
+    private static final int DRAWER_GAP = InventoryDrawerLayout.DRAWER_GAP;
+    private static final int ROW_HEIGHT = InventoryDrawerLayout.ROW_HEIGHT;
+    private static final long OPEN_ANIMATION_NANOS = 140_000_000L;
+
     private final Player player;
+    private final boolean drawerOpen;
+    private final String initialQuery;
+    private final boolean focusSearchOnOpen;
+    private final Map<AbstractWidget, Integer> drawerWidgetTargets = new LinkedHashMap<>();
+    private final Map<SearchIdentity, String> tooltipIndex = new HashMap<>();
     private EditBox search;
+    private Button drawerToggle;
     private Button categoryButton;
     private Button sortButton;
     private List<LogicalInventoryEntry> visibleEntries = List.of();
+    private int drawerWidth;
+    private int drawerHeight;
+    private int drawerLocalX;
+    private int drawerTop;
+    private int listTop;
+    private int visibleRows;
+    private int capacityTextY;
+    private int capacityBarY;
+    private int manageButtonY;
+    private int drawerAnimationOffset;
     private int categoryIndex;
     private int scrollOffset;
+    private long openedAtNanos;
     private long cachedRevision = -1;
     private long tooltipIndexRevision = -1;
     private String cachedQuery = "";
     private LogicalInventoryEntry hoveredEntry;
     private SortMode sortMode = SortMode.NAME_ASCENDING;
-    private final Map<SearchIdentity, String> tooltipIndex = new HashMap<>();
 
     public CapacityInventoryScreen(Player player) {
+        this(player, false, "", false);
+    }
+
+    private CapacityInventoryScreen(Player player, boolean drawerOpen, String initialQuery, boolean focusSearchOnOpen) {
         super(player);
         this.player = player;
-        this.imageWidth = PANEL_X + PANEL_WIDTH;
+        this.drawerOpen = drawerOpen;
+        this.initialQuery = initialQuery;
+        this.focusSearchOnOpen = focusSearchOnOpen;
+        this.imageWidth = VANILLA_WIDTH;
     }
 
     @Override
     protected void init() {
+        drawerWidgetTargets.clear();
+        InventoryDrawerLayout layout = InventoryDrawerLayout.calculate(width, height);
+        drawerWidth = layout.width();
+        drawerLocalX = VANILLA_WIDTH + DRAWER_GAP;
+        imageWidth = drawerOpen ? drawerLocalX + drawerWidth : VANILLA_WIDTH;
         super.init();
+
+        int toggleX = leftPos + VANILLA_WIDTH;
+        drawerToggle = addRenderableWidget(Button.builder(Component.literal(drawerOpen ? "<" : ">"), ignored -> toggleDrawer())
+                .tooltip(Tooltip.create(Component.translatable(drawerOpen
+                        ? "gui.stacksnotslots.close_inventory_browser"
+                        : "gui.stacksnotslots.inventory_browser")))
+                .bounds(toggleX, topPos + imageHeight / 2 - 10, 18, 20).build());
+        if (!drawerOpen) return;
+
         sortMode = data().inventorySortPreference();
         ResourceLocation selectedCategory = data().selectedCategoryPreference();
         List<CategoryDefinition> categories = visibleCategories();
         if (selectedCategory != null) {
-            int selectedIndex = java.util.stream.IntStream.range(0, categories.size())
+            categoryIndex = java.util.stream.IntStream.range(0, categories.size())
                     .filter(index -> categories.get(index).id().equals(selectedCategory)).findFirst().orElse(0);
-            categoryIndex = selectedIndex;
         }
-        search = new EditBox(font, leftPos + PANEL_X + 4, topPos + 5, 132, 18, Component.translatable("gui.stacksnotslots.search"));
-        search.setHint(Component.translatable("gui.stacksnotslots.search_hint"));
+
+        drawerHeight = layout.height();
+        drawerTop = layout.top();
+        int panelX = leftPos + drawerLocalX;
+        search = addDrawerWidget(new EditBox(font, panelX + 4, drawerTop + 5, drawerWidth - 8, 18,
+                Component.translatable("gui.stacksnotslots.search")));
+        search.setHint(Component.translatable("gui.stacksnotslots.search_hint_compact"));
         search.setMaxLength(96);
-        search.setResponder(ignored -> { scrollOffset = 0; rebuildEntries(); });
-        addRenderableWidget(search);
-        addRenderableWidget(Button.builder(Component.literal("<"), ignored -> changeCategory(-1)).bounds(leftPos + PANEL_X + 140, topPos + 5, 18, 18).build());
-        categoryButton = addRenderableWidget(Button.builder(Component.empty(), ignored -> changeCategory(1)).bounds(leftPos + PANEL_X + 160, topPos + 5, 78, 18).build());
-        sortButton = addRenderableWidget(Button.builder(Component.empty(), ignored -> cycleSort()).bounds(leftPos + PANEL_X + 4, topPos + 144, 112, 18).build());
-        addRenderableWidget(Button.builder(Component.translatable("gui.stacksnotslots.manage_tabs"), ignored -> minecraft.setScreen(new CategoryManagerScreen(this, player)))
-                .bounds(leftPos + PANEL_X + 120, topPos + 144, 118, 18).build());
+        search.setValue(initialQuery);
+        search.setResponder(ignored -> {
+            scrollOffset = 0;
+            rebuildEntries();
+        });
+
+        int sortWidth = Math.min(52, Math.max(38, drawerWidth / 3));
+        int categoryWidth = drawerWidth - sortWidth - 10;
+        categoryButton = addDrawerWidget(Button.builder(Component.empty(), ignored -> changeCategory(1))
+                .bounds(panelX + 4, drawerTop + 27, categoryWidth, 18).build());
+        sortButton = addDrawerWidget(Button.builder(Component.empty(), ignored -> cycleSort())
+                .bounds(panelX + 6 + categoryWidth, drawerTop + 27, sortWidth, 18).build());
+
+        manageButtonY = layout.manageButtonY();
+        capacityBarY = layout.capacityBarY();
+        capacityTextY = layout.capacityTextY();
+        listTop = layout.listTop();
+        visibleRows = layout.visibleRows();
+        addDrawerWidget(Button.builder(Component.translatable("gui.stacksnotslots.manage_tabs"), ignored ->
+                        minecraft.setScreen(new CategoryManagerScreen(this, player)))
+                .bounds(panelX + 4, manageButtonY, drawerWidth - 8, 18).build());
+
+        openedAtNanos = System.nanoTime();
         updateButtons();
         rebuildEntries();
+        if (focusSearchOnOpen) focusSearch();
+    }
+
+    private <T extends AbstractWidget> T addDrawerWidget(T widget) {
+        drawerWidgetTargets.put(widget, widget.getX() - leftPos);
+        return addRenderableWidget(widget);
     }
 
     public void focusSearch() {
-        if (search != null) { setFocused(search); search.setFocused(true); }
+        if (!drawerOpen) {
+            minecraft.setScreen(new CapacityInventoryScreen(player, true, "", true));
+            return;
+        }
+        if (search != null) {
+            setFocused(search);
+            search.setFocused(true);
+        }
+    }
+
+    public boolean isDrawerOpen() {
+        return drawerOpen;
+    }
+
+    /** Screen-space area reserved for JEI/EMI while the drawer is expanded. */
+    public Rect2i drawerBounds() {
+        if (!drawerOpen) return new Rect2i(leftPos + VANILLA_WIDTH, topPos + imageHeight / 2 - 10, 18, 20);
+        int x = leftPos + VANILLA_WIDTH;
+        return new Rect2i(x, drawerTop, drawerLocalX + drawerWidth - VANILLA_WIDTH, drawerHeight);
     }
 
     @Override
     protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
         int previousWidth = imageWidth;
         imageWidth = VANILLA_WIDTH;
-        int vanillaLeft = leftPos;
         super.renderBg(graphics, partialTick, mouseX, mouseY);
         imageWidth = previousWidth;
-        graphics.fill(vanillaLeft + PANEL_X, topPos, vanillaLeft + PANEL_X + PANEL_WIDTH, topPos + imageHeight, 0xE0C6C6C6);
-        graphics.fill(vanillaLeft + PANEL_X + 2, topPos + 2, vanillaLeft + PANEL_X + PANEL_WIDTH - 2, topPos + imageHeight - 2, 0xE0202020);
+        if (!drawerOpen) return;
+
+        int panelX = leftPos + drawerLocalX + drawerAnimationOffset;
+        graphics.fill(panelX, drawerTop, panelX + drawerWidth, drawerTop + drawerHeight, 0xE0C6C6C6);
+        graphics.fill(panelX + 2, drawerTop + 2, panelX + drawerWidth - 2, drawerTop + drawerHeight - 2, 0xF0202020);
+        int barWidth = drawerWidth - 12;
         long used = data().inventory().usedCapacity();
         long capacity = data().inventory().capacity();
-        int barWidth = PANEL_WIDTH - 12;
         int filled = capacity <= 0
                 ? (used > 0 ? barWidth : 0)
                 : used >= capacity ? barWidth : (int)(used * barWidth / capacity);
         int color = used > capacity ? 0xFFE34B4B : 0xFF54B45A;
-        graphics.fill(vanillaLeft + PANEL_X + 6, topPos + 132, vanillaLeft + PANEL_X + 6 + barWidth, topPos + 138, 0xFF454545);
-        graphics.fill(vanillaLeft + PANEL_X + 6, topPos + 132, vanillaLeft + PANEL_X + 6 + filled, topPos + 138, color);
+        graphics.fill(panelX + 6, capacityBarY, panelX + 6 + barWidth, capacityBarY + 6, 0xFF454545);
+        graphics.fill(panelX + 6, capacityBarY, panelX + 6 + filled, capacityBarY + 6, color);
     }
 
     @Override
     protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY) {
         super.renderLabels(graphics, mouseX, mouseY);
+        if (!drawerOpen) return;
         rebuildIfNeeded();
         hoveredEntry = null;
+        int panelX = drawerLocalX + drawerAnimationOffset;
+        int localListTop = listTop - topPos;
         int localMouseX = mouseX - leftPos;
         int localMouseY = mouseY - topPos;
-        for (int row = 0; row < VISIBLE_ROWS; row++) {
+        for (int row = 0; row < visibleRows; row++) {
             int index = scrollOffset + row;
             if (index >= visibleEntries.size()) break;
             LogicalInventoryEntry entry = visibleEntries.get(index);
-            int y = ROW_Y + row * ROW_HEIGHT;
-            if (localMouseX >= PANEL_X + 4 && localMouseX < PANEL_X + PANEL_WIDTH - 4 && localMouseY >= y && localMouseY < y + ROW_HEIGHT) {
-                graphics.fill(PANEL_X + 4, y, PANEL_X + PANEL_WIDTH - 4, y + ROW_HEIGHT, 0x804F72A5);
+            int y = localListTop + row * ROW_HEIGHT;
+            if (localMouseX >= panelX + 4 && localMouseX < panelX + drawerWidth - 4
+                    && localMouseY >= y && localMouseY < y + ROW_HEIGHT) {
+                graphics.fill(panelX + 4, y, panelX + drawerWidth - 4, y + ROW_HEIGHT, 0x804F72A5);
                 hoveredEntry = entry;
             }
             ItemStack stack = entry.representative();
-            graphics.renderItem(stack, PANEL_X + 6, y + 1);
-            graphics.drawString(font, font.plainSubstrByWidth(stack.getHoverName().getString(), 150), PANEL_X + 27, y + 5, 0xFFFFFF, false);
-            graphics.drawString(font, Long.toString(entry.quantity()), PANEL_X + PANEL_WIDTH - 10 - font.width(Long.toString(entry.quantity())), y + 5, 0xE0E0E0, false);
+            graphics.renderItem(stack, panelX + 6, y + 1);
+            String count = Long.toString(entry.quantity());
+            int countWidth = font.width(count);
+            int nameWidth = Math.max(12, drawerWidth - 43 - countWidth);
+            graphics.drawString(font, font.plainSubstrByWidth(stack.getHoverName().getString(), nameWidth), panelX + 27, y + 5, 0xFFFFFF, false);
+            graphics.drawString(font, count, panelX + drawerWidth - 8 - countWidth, y + 5, 0xE0E0E0, false);
         }
         long used = data().inventory().usedCapacity();
         long capacity = data().inventory().capacity();
-        String capacityText = capacityText(used, capacity) + (used > capacity ? "  OVER CAPACITY: " + (used - capacity) : "");
-        graphics.drawString(font, capacityText, PANEL_X + 6, 121, used > capacity ? 0xFF7777 : 0xFFFFFF, false);
+        String fullText = capacityText(used, capacity) + (used > capacity ? "  +" + (used - capacity) : "");
+        String compactText = used + " / " + capacity + (used > capacity ? "  +" + (used - capacity) : "");
+        String displayed = font.width(fullText) <= drawerWidth - 12 ? fullText : compactText;
+        graphics.drawString(font, font.plainSubstrByWidth(displayed, drawerWidth - 12), panelX + 6,
+                capacityTextY - topPos, used > capacity ? 0xFF7777 : 0xFFFFFF, false);
     }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        updateDrawerAnimation();
         super.render(graphics, mouseX, mouseY, partialTick);
         if (hoveredEntry != null) graphics.renderTooltip(font, hoveredEntry.representative(), mouseX, mouseY);
+    }
+
+    private void updateDrawerAnimation() {
+        if (drawerToggle != null) drawerToggle.setX(leftPos + VANILLA_WIDTH);
+        if (!drawerOpen) return;
+        double progress = Math.min(1.0, (System.nanoTime() - openedAtNanos) / (double)OPEN_ANIMATION_NANOS);
+        double eased = 1.0 - Math.pow(1.0 - progress, 3.0);
+        drawerAnimationOffset = (int)Math.round((1.0 - eased) * (drawerWidth + 8));
+        for (Map.Entry<AbstractWidget, Integer> entry : drawerWidgetTargets.entrySet()) {
+            entry.getKey().setX(leftPos + entry.getValue() + drawerAnimationOffset);
+        }
     }
 
     @Override
@@ -149,7 +258,8 @@ public final class CapacityInventoryScreen extends InventoryScreen {
                 PacketDistributor.sendToServer(new HotbarBindPayload(player.getInventory().selected, BindingType.ITEM, id));
                 return true;
             }
-            InventoryActionPayload.Action action = button == 1 ? InventoryActionPayload.Action.TAKE_HALF : InventoryActionPayload.Action.TAKE_STACK;
+            InventoryActionPayload.Action action = button == 1
+                    ? InventoryActionPayload.Action.TAKE_HALF : InventoryActionPayload.Action.TAKE_STACK;
             PacketDistributor.sendToServer(new InventoryActionPayload(action, entry.representative()));
             return true;
         }
@@ -158,8 +268,10 @@ public final class CapacityInventoryScreen extends InventoryScreen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (minecraft.options.keyDrop.matches(keyCode, scanCode) && hoveredEntry != null && !search.isFocused()) {
-            InventoryActionPayload.Action action = Screen.hasControlDown() ? InventoryActionPayload.Action.DROP_STACK : InventoryActionPayload.Action.DROP_ONE;
+        if (drawerOpen && minecraft.options.keyDrop.matches(keyCode, scanCode) && hoveredEntry != null
+                && search != null && !search.isFocused()) {
+            InventoryActionPayload.Action action = Screen.hasControlDown()
+                    ? InventoryActionPayload.Action.DROP_STACK : InventoryActionPayload.Action.DROP_ONE;
             PacketDistributor.sendToServer(new InventoryActionPayload(action, hoveredEntry.representative()));
             return true;
         }
@@ -168,18 +280,29 @@ public final class CapacityInventoryScreen extends InventoryScreen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        if (mouseX >= leftPos + PANEL_X && mouseX < leftPos + PANEL_X + PANEL_WIDTH && mouseY >= topPos + ROW_Y && mouseY < topPos + ROW_Y + VISIBLE_ROWS * ROW_HEIGHT) {
-            int max = Math.max(0, visibleEntries.size() - VISIBLE_ROWS);
+        int panelX = leftPos + drawerLocalX + drawerAnimationOffset;
+        if (drawerOpen && mouseX >= panelX && mouseX < panelX + drawerWidth
+                && mouseY >= listTop && mouseY < listTop + visibleRows * ROW_HEIGHT) {
+            int max = Math.max(0, visibleEntries.size() - visibleRows);
             scrollOffset = Math.max(0, Math.min(max, scrollOffset - (int)Math.signum(scrollY)));
             return true;
         }
         return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
-    private PlayerInventoryData data() { return player.getData(ModAttachments.PLAYER_DATA); }
+    private void toggleDrawer() {
+        String query = search == null ? "" : search.getValue();
+        minecraft.setScreen(new CapacityInventoryScreen(player, !drawerOpen, query, false));
+    }
+
+    private PlayerInventoryData data() {
+        return player.getData(ModAttachments.PLAYER_DATA);
+    }
 
     private void rebuildIfNeeded() {
-        if (cachedRevision != data().inventory().revision() || !cachedQuery.equals(search.getValue())) rebuildEntries();
+        if (search != null && (cachedRevision != data().inventory().revision() || !cachedQuery.equals(search.getValue()))) {
+            rebuildEntries();
+        }
     }
 
     private void rebuildEntries() {
@@ -199,7 +322,7 @@ public final class CapacityInventoryScreen extends InventoryScreen {
         }
         entries.sort(comparator());
         visibleEntries = List.copyOf(entries);
-        scrollOffset = Math.min(scrollOffset, Math.max(0, visibleEntries.size() - VISIBLE_ROWS));
+        scrollOffset = Math.min(scrollOffset, Math.max(0, visibleEntries.size() - visibleRows));
     }
 
     private boolean matchesSearch(ItemStack stack, String rawQuery) {
@@ -220,16 +343,19 @@ public final class CapacityInventoryScreen extends InventoryScreen {
     }
 
     private Comparator<LogicalInventoryEntry> comparator() {
-        Comparator<LogicalInventoryEntry> byName = Comparator.comparing(entry -> entry.representative().getHoverName().getString(), String.CASE_INSENSITIVE_ORDER);
+        Comparator<LogicalInventoryEntry> byName = Comparator.comparing(
+                entry -> entry.representative().getHoverName().getString(), String.CASE_INSENSITIVE_ORDER);
         Comparator<LogicalInventoryEntry> byQuantity = Comparator.comparingLong(LogicalInventoryEntry::quantity);
-        Comparator<LogicalInventoryEntry> byId = Comparator.comparing(entry -> BuiltInRegistries.ITEM.getKey(entry.representative().getItem()).toString());
+        Comparator<LogicalInventoryEntry> byId = Comparator.comparing(
+                entry -> BuiltInRegistries.ITEM.getKey(entry.representative().getItem()).toString());
         return switch (sortMode) {
             case NAME_ASCENDING -> byName;
             case NAME_DESCENDING -> byName.reversed();
             case QUANTITY_ASCENDING -> byQuantity.thenComparing(byName);
             case QUANTITY_DESCENDING -> byQuantity.reversed().thenComparing(byName);
             case REGISTRY_ID -> byId;
-            case MOD_NAMESPACE -> Comparator.comparing((LogicalInventoryEntry entry) -> BuiltInRegistries.ITEM.getKey(entry.representative().getItem()).getNamespace()).thenComparing(byId);
+            case MOD_NAMESPACE -> Comparator.comparing((LogicalInventoryEntry entry) ->
+                    BuiltInRegistries.ITEM.getKey(entry.representative().getItem()).getNamespace()).thenComparing(byId);
         };
     }
 
@@ -246,9 +372,7 @@ public final class CapacityInventoryScreen extends InventoryScreen {
         scrollOffset = 0;
         CategoryDefinition selected = currentCategory();
         if (selected != null) sortMode = selected.sortMode();
-        data().setSelectedCategoryPreference(selected == null ? null : selected.id());
-        data().setInventorySortPreference(sortMode);
-        PacketDistributor.sendToServer(new InventoryViewPreferencesPayload(sortMode, selected == null ? null : selected.id()));
+        applyViewPreferences(selected);
         updateButtons();
         rebuildEntries();
     }
@@ -256,11 +380,16 @@ public final class CapacityInventoryScreen extends InventoryScreen {
     private void cycleSort() {
         SortMode[] modes = SortMode.values();
         sortMode = modes[(sortMode.ordinal() + 1) % modes.length];
-        data().setInventorySortPreference(sortMode);
-        CategoryDefinition selected = currentCategory();
-        PacketDistributor.sendToServer(new InventoryViewPreferencesPayload(sortMode, selected == null ? null : selected.id()));
+        applyViewPreferences(currentCategory());
         updateButtons();
         rebuildEntries();
+    }
+
+    private void applyViewPreferences(CategoryDefinition selected) {
+        ResourceLocation selectedId = selected == null ? null : selected.id();
+        data().setSelectedCategoryPreference(selectedId);
+        data().setInventorySortPreference(sortMode);
+        PacketDistributor.sendToServer(new InventoryViewPreferencesPayload(sortMode, selectedId));
     }
 
     private List<CategoryDefinition> visibleCategories() {
@@ -269,16 +398,31 @@ public final class CapacityInventoryScreen extends InventoryScreen {
 
     private void updateButtons() {
         CategoryDefinition category = currentCategory();
-        if (categoryButton != null) categoryButton.setMessage(category == null ? Component.translatable("gui.stacksnotslots.all") : Component.literal(category.displayName() + " >"));
-        if (sortButton != null) sortButton.setMessage(Component.translatable("gui.stacksnotslots.sort", Component.translatable("sort.stacksnotslots." + sortMode.name().toLowerCase(Locale.ROOT))));
+        if (categoryButton != null) {
+            String name = category == null ? Component.translatable("gui.stacksnotslots.all").getString() : category.displayName();
+            categoryButton.setMessage(Component.literal(font.plainSubstrByWidth(name, categoryButton.getWidth() - 12) + " >"));
+        }
+        if (sortButton != null) sortButton.setMessage(Component.literal(shortSortName(sortMode)));
     }
 
     private LogicalInventoryEntry entryAt(double mouseX, double mouseY) {
-        int x = (int)mouseX - leftPos;
-        int y = (int)mouseY - topPos;
-        if (x < PANEL_X + 4 || x >= PANEL_X + PANEL_WIDTH - 4 || y < ROW_Y || y >= ROW_Y + VISIBLE_ROWS * ROW_HEIGHT) return null;
-        int index = scrollOffset + (y - ROW_Y) / ROW_HEIGHT;
+        if (!drawerOpen) return null;
+        int panelX = leftPos + drawerLocalX + drawerAnimationOffset;
+        if (mouseX < panelX + 4 || mouseX >= panelX + drawerWidth - 4
+                || mouseY < listTop || mouseY >= listTop + visibleRows * ROW_HEIGHT) return null;
+        int index = scrollOffset + ((int)mouseY - listTop) / ROW_HEIGHT;
         return index >= 0 && index < visibleEntries.size() ? visibleEntries.get(index) : null;
+    }
+
+    private static String shortSortName(SortMode mode) {
+        return switch (mode) {
+            case NAME_ASCENDING -> "A-Z";
+            case NAME_DESCENDING -> "Z-A";
+            case QUANTITY_ASCENDING -> "1-9";
+            case QUANTITY_DESCENDING -> "9-1";
+            case REGISTRY_ID -> "ID";
+            case MOD_NAMESPACE -> "Mod";
+        };
     }
 
     private static String capacityText(long used, long capacity) {

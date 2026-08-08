@@ -86,7 +86,7 @@ public final class CategoryEditorScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderBackground(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, mouseX, mouseY, partialTick);
         int left = width / 2 - 150;
         graphics.drawCenteredString(font, title, width / 2, 15, 0xFFFFFF);
         graphics.drawString(font, Component.translatable("gui.stacksnotslots.editor_help"), left, 98, 0xA0A0A0, false);
@@ -99,7 +99,6 @@ public final class CategoryEditorScreen extends Screen {
             graphics.drawString(font, suggestion.label(), left + 22, y + 6, 0xFFFFFF, false);
         }
         graphics.drawString(font, Component.translatable("gui.stacksnotslots.rule_counts", includes.size(), excludes.size()), left, Math.min(height - 67, 260), 0xD0D0D0, false);
-        super.render(graphics, mouseX, mouseY, partialTick);
     }
 
     @Override

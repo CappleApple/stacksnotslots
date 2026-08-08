@@ -67,10 +67,9 @@ public final class CategoryManagerScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderBackground(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, mouseX, mouseY, partialTick);
         graphics.drawCenteredString(font, title, width / 2, 15, 0xFFFFFF);
         graphics.drawCenteredString(font, Component.translatable("gui.stacksnotslots.tabs_are_views"), width / 2, 26, 0xA0A0A0);
-        super.render(graphics, mouseX, mouseY, partialTick);
     }
 
     @Override

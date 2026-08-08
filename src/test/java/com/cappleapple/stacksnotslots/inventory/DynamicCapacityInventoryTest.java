@@ -8,6 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.cappleapple.stacksnotslots.api.InsertionRejection;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.Map;
+import java.util.List;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponents;
@@ -196,5 +198,36 @@ class DynamicCapacityInventoryTest {
         assertEquals(1, inventory.entries().getFirst().quantity());
         assertEquals(1, inventory.usedCapacity());
         assertTrue(inventory.validate());
+    }
+
+    @Test
+    void explicitSparsePlacementStaysPutAndSurvivesPersistence() {
+        DynamicCapacityInventory inventory = new DynamicCapacityInventory(() -> 512);
+        inventory.replaceSyntheticSlot(12, new ItemStack(Items.APPLE, 3));
+        inventory.insert(new ItemStack(Items.DIRT), false);
+
+        assertEquals(13, inventory.syntheticSlotCount());
+        assertEquals(Items.DIRT, inventory.syntheticStack(0).getItem());
+        assertEquals(Items.APPLE, inventory.syntheticStack(12).getItem());
+        assertEquals(4, inventory.usedCapacity());
+
+        RegistryAccess.Frozen access = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        DynamicCapacityInventory loaded = new DynamicCapacityInventory(() -> 512);
+        loaded.deserializeNBT(access, inventory.serializeNBT(access));
+        assertEquals(13, loaded.syntheticSlotCount());
+        assertEquals(Items.DIRT, loaded.syntheticStack(0).getItem());
+        assertEquals(3, loaded.syntheticStack(12).getCount());
+        assertTrue(loaded.validate());
+    }
+
+    @Test
+    void networkDeltasPermitStableEmptySlots() {
+        DynamicCapacityInventory client = new DynamicCapacityInventory(() -> 512);
+        client.loadNetworkSnapshot(List.of(ItemStack.EMPTY, new ItemStack(Items.STONE), new ItemStack(Items.DIRT)), 7);
+        assertTrue(client.applyNetworkDelta(7, 8, 3, Map.of(1, ItemStack.EMPTY)));
+        assertEquals(3, client.syntheticSlotCount());
+        assertTrue(client.syntheticStack(1).isEmpty());
+        assertEquals(Items.DIRT, client.syntheticStack(2).getItem());
+        assertTrue(client.validate());
     }
 }

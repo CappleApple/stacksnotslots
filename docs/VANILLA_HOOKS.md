@@ -6,7 +6,7 @@ Minecraft 1.21.1 assumes 36 player item indices in menus and several direct code
 
 The mixin activates only after the one-time vanilla inventory migration marker is set.
 
-- `getItem`, `getSelected`, `setItem`, and removal methods map vanilla indices 0–35 to logical backing entries or hotbar bindings.
+- `getItem`, `getSelected`, `setItem`, and removal methods map vanilla indices 0–35 to sparse backing positions, active category projections, or hotbar bindings.
 - both `add` overloads call the centralized capacity transaction; pickup, commands, rewards, trading, crafting remainders, and most modded vanilla-style insertion therefore share one enforcement path.
 - `getFreeSlot`, stack matching, and remaining-space queries describe only the projection and never define logical carrying capacity.
 - `tick` ticks every actual backing stack; changes made through a live held-item reference are reconciled by identity/count hash.
@@ -32,7 +32,13 @@ Vanilla menu transfer logic splits source stacks before calling `Inventory.setIt
 
 ## Dynamic NeoForge view
 
-`DynamicItemHandler` is independent of vanilla's 36-index projection. It reports every occupied legal backing stack plus an append slot. Inserting through that final slot may grow the view, so the synthetic slot count can represent as many distinct stacks as capacity and JVM memory/indexing allow.
+`DynamicItemHandler` is independent of vanilla's 36-index projection. It reports the complete sparse indexed extent plus an append slot. Empty positions remain addressable, and insertion/replacement targets the requested index instead of silently merging elsewhere. Inserting through the final slot may grow the view, so the synthetic slot count can represent as many distinct stacks as capacity and JVM memory/indexing allow.
+
+## Client projection and recipe-view compatibility
+
+`GuiMixin` changes only vanilla HUD hotbar item lookup, routing its direct `Inventory.items` read through the live `Inventory.getItem` projection. This fixes immediate visual synchronization without turning the fixed vanilla field into storage.
+
+The inventory browser is collapsed by default. Its expanded bounds are registered with JEI and EMI as GUI exclusion areas, allowing their ingredient lists to reserve space around the drawer.
 
 ## Remaining direct-field risk
 

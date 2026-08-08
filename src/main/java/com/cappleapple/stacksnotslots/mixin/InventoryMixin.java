@@ -6,6 +6,7 @@ import com.cappleapple.stacksnotslots.data.PlayerInventoryData;
 import com.cappleapple.stacksnotslots.hotbar.BindingType;
 import com.cappleapple.stacksnotslots.hotbar.HotbarBinding;
 import com.cappleapple.stacksnotslots.category.CategoryMatcher;
+import com.cappleapple.stacksnotslots.compat.InventoryProjection;
 import com.cappleapple.stacksnotslots.network.ModNetwork;
 import com.cappleapple.stacksnotslots.inventory.DynamicCapacityInventory;
 import com.cappleapple.stacksnotslots.inventory.InsertionContext;
@@ -36,6 +37,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class InventoryMixin {
     @Shadow @Final public Player player;
     @Shadow @Final public NonNullList<ItemStack> items;
+    @Unique private int[] sns$projection = new int[0];
+    @Unique private long sns$projectionInventoryRevision = Long.MIN_VALUE;
+    @Unique private int sns$projectionStateHash;
 
     @Unique
     private PlayerInventoryData sns$data() { return player.getData(ModAttachments.PLAYER_DATA); }
@@ -45,12 +49,25 @@ public abstract class InventoryMixin {
 
     @Unique
     private int sns$logicalIndex(int vanillaSlot) {
-        DynamicCapacityInventory inventory = sns$data().inventory();
-        if (vanillaSlot >= 0 && vanillaSlot < 9 && sns$data().hotbar().get(vanillaSlot).type() != BindingType.EMPTY) {
-            int index = sns$data().hotbar().resolveIndex(vanillaSlot, inventory, sns$data().categories());
-            if (index >= 0) return index;
+        if (vanillaSlot < 0 || vanillaSlot >= Inventory.INVENTORY_SIZE) return vanillaSlot;
+        PlayerInventoryData data = sns$data();
+        int stateHash = InventoryProjection.stateHash(data);
+        if (sns$projection.length != Inventory.INVENTORY_SIZE
+                || sns$projectionInventoryRevision != data.inventory().revision()
+                || sns$projectionStateHash != stateHash) {
+            sns$projection = InventoryProjection.build(data);
+            sns$projectionInventoryRevision = data.inventory().revision();
+            sns$projectionStateHash = InventoryProjection.stateHash(data);
         }
-        return vanillaSlot;
+        return sns$projection[vanillaSlot];
+    }
+
+    @Unique
+    private int sns$vanillaSlotForLogical(int logicalIndex) {
+        for (int slot = 0; slot < Inventory.INVENTORY_SIZE; slot++) {
+            if (sns$logicalIndex(slot) == logicalIndex) return slot;
+        }
+        return -1;
     }
 
     @Inject(method = "getItem", at = @At("HEAD"), cancellable = true)
@@ -70,14 +87,9 @@ public abstract class InventoryMixin {
         if (!sns$active() || slot < 0 || slot >= Inventory.INVENTORY_SIZE) return;
         DynamicCapacityInventory inventory = sns$data().inventory();
         int index = sns$logicalIndex(slot);
-        if (index < inventory.syntheticSlotCount()) {
-            inventory.replaceSyntheticSlotFromItemUse(index, stack);
-            sns$followHeldItemReplacement(slot, stack);
-        }
-        else if (!stack.isEmpty()) {
-            InsertionResult result = InventoryTransactions.insert(player, stack, InsertionContext.MANUAL_TRANSFER, false);
-            if (!result.acceptedAll()) player.drop(result.remainder(), false);
-        }
+        if (index < 0) index = inventory.firstEmptySyntheticSlot(Integer.MAX_VALUE);
+        inventory.replaceSyntheticSlotFromItemUse(index, stack);
+        sns$followHeldItemReplacement(slot, stack);
         callback.cancel();
     }
 
@@ -143,15 +155,14 @@ public abstract class InventoryMixin {
 
     @Inject(method = "getFreeSlot", at = @At("HEAD"), cancellable = true)
     private void sns$getFreeSlot(CallbackInfoReturnable<Integer> callback) {
-        if (sns$active()) callback.setReturnValue(sns$data().inventory().syntheticSlotCount() < Inventory.INVENTORY_SIZE
-                ? sns$data().inventory().syntheticSlotCount() : -1);
+        if (sns$active()) callback.setReturnValue(sns$data().inventory().firstEmptySyntheticSlot(Inventory.INVENTORY_SIZE));
     }
 
     @Inject(method = "findSlotMatchingItem", at = @At("HEAD"), cancellable = true)
     private void sns$findMatching(ItemStack stack, CallbackInfoReturnable<Integer> callback) {
         if (!sns$active()) return;
         int index = sns$data().inventory().indexOf(stack);
-        callback.setReturnValue(index >= 0 && index < Inventory.INVENTORY_SIZE ? index : -1);
+        callback.setReturnValue(index < 0 ? -1 : sns$vanillaSlotForLogical(index));
     }
 
     @Inject(method = "getSlotWithRemainingSpace", at = @At("HEAD"), cancellable = true)
@@ -160,6 +171,7 @@ public abstract class InventoryMixin {
         List<ItemStack> stacks = sns$data().inventory().backingStacks();
         for (int i = 0; i < Math.min(stacks.size(), Inventory.INVENTORY_SIZE); i++) {
             ItemStack stored = stacks.get(i);
+            if (stored.isEmpty()) continue;
             if (ItemStack.isSameItemSameComponents(stored, stack) && stored.getCount() < stored.getMaxStackSize()) {
                 callback.setReturnValue(i);
                 return;
