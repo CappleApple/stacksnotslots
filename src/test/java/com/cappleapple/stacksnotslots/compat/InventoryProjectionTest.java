@@ -1,6 +1,7 @@
 package com.cappleapple.stacksnotslots.compat;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.cappleapple.stacksnotslots.category.CategoryDefinition;
 import com.cappleapple.stacksnotslots.category.CategoryRule;
@@ -25,13 +26,16 @@ class InventoryProjectionTest {
     }
 
     @Test
-    void categorySelectionFiltersAndSortsOnlyTheVanillaMainGrid() {
+    void explicitViewIsOneShotDistinctAndNeverTouchesHotbar() {
         PlayerInventoryData data = new PlayerInventoryData(null);
         ArrayList<ItemStack> sparse = new ArrayList<>();
-        for (int slot = 0; slot < 9; slot++) sparse.add(ItemStack.EMPTY);
-        sparse.add(new ItemStack(Items.STONE));
+        sparse.add(new ItemStack(Items.DIAMOND_SWORD));
+        for (int slot = 1; slot < 9; slot++) sparse.add(ItemStack.EMPTY);
+        sparse.add(new ItemStack(Items.STONE, 64));
+        sparse.add(new ItemStack(Items.STONE, 64));
         sparse.add(new ItemStack(Items.APPLE));
         sparse.add(new ItemStack(Items.DIRT));
+        sparse.add(new ItemStack(Items.COBBLESTONE));
         data.inventory().loadNetworkSnapshot(sparse, 1);
 
         ResourceLocation categoryId = ResourceLocation.fromNamespaceAndPath("stacksnotslots", "blocks_test");
@@ -39,21 +43,26 @@ class InventoryProjectionTest {
                 categoryId, "Blocks", BuiltInRegistries.ITEM.getKey(Items.STONE), 0,
                 List.of(
                         new CategoryRule(CategoryRule.Type.ITEM, BuiltInRegistries.ITEM.getKey(Items.STONE)),
-                        new CategoryRule(CategoryRule.Type.ITEM, BuiltInRegistries.ITEM.getKey(Items.DIRT))),
-                List.of(), -1,
-                SortMode.REGISTRY_ID, true, false)), true);
-
-        int[] stable = InventoryProjection.build(data);
-        assertEquals(9, stable[9]);
-        assertEquals(10, stable[10]);
-        assertEquals(11, stable[11]);
-
+                        new CategoryRule(CategoryRule.Type.ITEM, BuiltInRegistries.ITEM.getKey(Items.DIRT)),
+                        new CategoryRule(CategoryRule.Type.ITEM, BuiltInRegistries.ITEM.getKey(Items.COBBLESTONE))),
+                List.of(), -1, SortMode.REGISTRY_ID, true, false)), true);
         data.setSelectedCategoryPreference(categoryId);
         data.setInventorySortPreference(SortMode.REGISTRY_ID);
-        int[] filtered = InventoryProjection.build(data);
-        assertEquals(11, filtered[9]);
-        assertEquals(9, filtered[10]);
-        assertEquals(-1, filtered[11]);
-        for (int hotbarSlot = 0; hotbarSlot < 9; hotbarSlot++) assertEquals(hotbarSlot, filtered[hotbarSlot]);
+
+        InventoryProjection.applyExplicitView(data);
+        assertEquals(Items.DIAMOND_SWORD, data.inventory().syntheticStack(0).getItem());
+        assertEquals(Items.COBBLESTONE, data.inventory().syntheticStack(9).getItem());
+        assertEquals(Items.DIRT, data.inventory().syntheticStack(10).getItem());
+        assertEquals(Items.STONE, data.inventory().syntheticStack(11).getItem());
+        assertTrue(data.inventory().syntheticStack(12).isEmpty());
+        assertEquals(Items.STONE, data.inventory().syntheticStack(36).getItem());
+        assertEquals(Items.APPLE, data.inventory().syntheticStack(37).getItem());
+
+        data.inventory().replaceSyntheticSlotFromItemUse(20, new ItemStack(Items.DIAMOND));
+        int[] stable = InventoryProjection.build(data);
+        assertEquals(20, stable[20]);
+        assertEquals(Items.DIAMOND, data.inventory().syntheticStack(20).getItem());
+        assertEquals(Items.DIAMOND_SWORD, data.inventory().syntheticStack(0).getItem());
+        assertTrue(data.inventory().validate());
     }
 }

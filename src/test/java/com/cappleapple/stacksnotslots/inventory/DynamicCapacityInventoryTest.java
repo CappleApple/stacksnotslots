@@ -230,4 +230,22 @@ class DynamicCapacityInventoryTest {
         assertEquals(Items.DIRT, client.syntheticStack(2).getItem());
         assertTrue(client.validate());
     }
+
+    @Test
+    void backendStowAndPickupExclusionNeverReuseVisibleHotbarSlots() {
+        DynamicCapacityInventory inventory = new DynamicCapacityInventory(() -> 512);
+        inventory.replaceSyntheticSlot(0, new ItemStack(Items.APPLE, 3));
+        inventory.replaceSyntheticSlot(9, new ItemStack(Items.STONE));
+
+        assertTrue(inventory.stowSyntheticSlot(0));
+        assertTrue(inventory.syntheticStack(0).isEmpty());
+        assertEquals(Items.STONE, inventory.syntheticStack(9).getItem());
+        assertEquals(Items.APPLE, inventory.syntheticStack(36).getItem());
+
+        assertTrue(inventory.insertAtOrAfter(new ItemStack(Items.DIRT), 9, false).acceptedAll());
+        assertTrue(inventory.syntheticStack(0).isEmpty());
+        assertEquals(Items.DIRT, inventory.syntheticStack(10).getItem());
+        assertEquals(5, inventory.usedCapacity());
+        assertTrue(inventory.validate());
+    }
 }

@@ -5,12 +5,12 @@ import com.cappleapple.stacksnotslots.category.CategoryDefinition;
 import com.cappleapple.stacksnotslots.category.CategoryMatcher;
 import com.cappleapple.stacksnotslots.category.SortMode;
 import com.cappleapple.stacksnotslots.config.ClientConfig;
+import com.cappleapple.stacksnotslots.client.ClientKeyMappings;
 import com.cappleapple.stacksnotslots.data.ModAttachments;
 import com.cappleapple.stacksnotslots.data.PlayerInventoryData;
-import com.cappleapple.stacksnotslots.hotbar.BindingType;
-import com.cappleapple.stacksnotslots.network.HotbarBindPayload;
 import com.cappleapple.stacksnotslots.network.InventoryActionPayload;
 import com.cappleapple.stacksnotslots.network.InventoryViewPreferencesPayload;
+import com.cappleapple.stacksnotslots.network.StowSlotPayload;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -30,6 +30,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
@@ -52,6 +53,7 @@ public final class CapacityInventoryScreen extends InventoryScreen {
     private Button drawerToggle;
     private Button categoryButton;
     private Button sortButton;
+    private Button compactCategorySelector;
     private List<LogicalInventoryEntry> visibleEntries = List.of();
     private int drawerWidth;
     private int drawerHeight;
@@ -70,7 +72,10 @@ public final class CapacityInventoryScreen extends InventoryScreen {
     private long tooltipIndexRevision = -1;
     private String cachedQuery = "";
     private LogicalInventoryEntry hoveredEntry;
+    private CategoryDefinition hoveredCategory;
     private SortMode sortMode = SortMode.NAME_ASCENDING;
+    private boolean categoryMenuOpen;
+    private int categoryMenuCenter;
 
     public CapacityInventoryScreen(Player player) {
         this(player, false, "", false);
@@ -94,14 +99,6 @@ public final class CapacityInventoryScreen extends InventoryScreen {
         imageWidth = drawerOpen ? drawerLocalX + drawerWidth : VANILLA_WIDTH;
         super.init();
 
-        int toggleX = leftPos + VANILLA_WIDTH;
-        drawerToggle = addRenderableWidget(Button.builder(Component.literal(drawerOpen ? "<" : ">"), ignored -> toggleDrawer())
-                .tooltip(Tooltip.create(Component.translatable(drawerOpen
-                        ? "gui.stacksnotslots.close_inventory_browser"
-                        : "gui.stacksnotslots.inventory_browser")))
-                .bounds(toggleX, topPos + imageHeight / 2 - 10, 18, 20).build());
-        if (!drawerOpen) return;
-
         sortMode = data().inventorySortPreference();
         ResourceLocation selectedCategory = data().selectedCategoryPreference();
         List<CategoryDefinition> categories = visibleCategories();
@@ -109,6 +106,22 @@ public final class CapacityInventoryScreen extends InventoryScreen {
             categoryIndex = java.util.stream.IntStream.range(0, categories.size())
                     .filter(index -> categories.get(index).id().equals(selectedCategory)).findFirst().orElse(0);
         }
+        categoryMenuCenter = categoryIndex;
+        CategoryDefinition compactCategory = currentCategory();
+        compactCategorySelector = addRenderableWidget(Button.builder(Component.empty(), ignored -> {
+                    categoryMenuOpen = !categoryMenuOpen;
+                    categoryMenuCenter = categoryIndex;
+                }).tooltip(Tooltip.create(Component.literal(compactCategory == null
+                        ? Component.translatable("gui.stacksnotslots.all").getString() : compactCategory.displayName())))
+                .bounds(leftPos + ClientConfig.CATEGORY_SELECTOR_X.getAsInt(), topPos + ClientConfig.CATEGORY_SELECTOR_Y.getAsInt(), 20, 20).build());
+
+        int toggleX = leftPos + VANILLA_WIDTH;
+        drawerToggle = addRenderableWidget(Button.builder(Component.literal(drawerOpen ? "<" : ">"), ignored -> toggleDrawer())
+                .tooltip(Tooltip.create(Component.translatable(drawerOpen
+                        ? "gui.stacksnotslots.close_inventory_browser"
+                        : "gui.stacksnotslots.inventory_browser")))
+                .bounds(toggleX, topPos + imageHeight / 2 - 10, 18, 20).build());
+        if (!drawerOpen) return;
 
         drawerHeight = layout.height();
         drawerTop = layout.top();
@@ -235,7 +248,9 @@ public final class CapacityInventoryScreen extends InventoryScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         updateDrawerAnimation();
         super.render(graphics, mouseX, mouseY, partialTick);
+        renderCompactCategorySelector(graphics, mouseX, mouseY);
         if (hoveredEntry != null) graphics.renderTooltip(font, hoveredEntry.representative(), mouseX, mouseY);
+        if (hoveredCategory != null) graphics.renderTooltip(font, Component.literal(hoveredCategory.displayName()), mouseX, mouseY);
     }
 
     private void updateDrawerAnimation() {
@@ -251,13 +266,21 @@ public final class CapacityInventoryScreen extends InventoryScreen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 0 && ClientKeyMappings.STOW_MODIFIER.isDown() && hoveredSlot != null
+                && hoveredSlot.container instanceof Inventory
+                && hoveredSlot.getContainerSlot() >= 0 && hoveredSlot.getContainerSlot() < Inventory.INVENTORY_SIZE
+                && !hoveredSlot.getItem().isEmpty()) {
+            PacketDistributor.sendToServer(new StowSlotPayload(hoveredSlot.getContainerSlot()));
+            return true;
+        }
+        if (categoryMenuOpen && button == 0 && selectCategoryAt(mouseX, mouseY)) return true;
+        if (drawerOpen && (button == 0 || button == 1) && isOverDrawerList(mouseX, mouseY)
+                && !player.containerMenu.getCarried().isEmpty()) {
+            PacketDistributor.sendToServer(new StowSlotPayload(-1));
+            return true;
+        }
         LogicalInventoryEntry entry = entryAt(mouseX, mouseY);
         if (entry != null && (button == 0 || button == 1)) {
-            if (Screen.hasShiftDown()) {
-                ResourceLocation id = BuiltInRegistries.ITEM.getKey(entry.representative().getItem());
-                PacketDistributor.sendToServer(new HotbarBindPayload(player.getInventory().selected, BindingType.ITEM, id));
-                return true;
-            }
             InventoryActionPayload.Action action = button == 1
                     ? InventoryActionPayload.Action.TAKE_HALF : InventoryActionPayload.Action.TAKE_STACK;
             PacketDistributor.sendToServer(new InventoryActionPayload(action, entry.representative()));
@@ -280,6 +303,13 @@ public final class CapacityInventoryScreen extends InventoryScreen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (categoryMenuOpen && compactCategorySelector != null
+                && mouseX >= compactCategorySelector.getX() + 20 && mouseX < compactCategorySelector.getX() + 42
+                && mouseY >= compactCategorySelector.getY() - 42 && mouseY < compactCategorySelector.getY() + 58) {
+            List<CategoryDefinition> categories = visibleCategories();
+            if (!categories.isEmpty()) categoryMenuCenter = Math.floorMod(categoryMenuCenter - (int)Math.signum(scrollY), categories.size());
+            return true;
+        }
         int panelX = leftPos + drawerLocalX + drawerAnimationOffset;
         if (drawerOpen && mouseX >= panelX && mouseX < panelX + drawerWidth
                 && mouseY >= listTop && mouseY < listTop + visibleRows * ROW_HEIGHT) {
@@ -398,6 +428,10 @@ public final class CapacityInventoryScreen extends InventoryScreen {
 
     private void updateButtons() {
         CategoryDefinition category = currentCategory();
+        if (compactCategorySelector != null) {
+            compactCategorySelector.setTooltip(Tooltip.create(Component.literal(category == null
+                    ? Component.translatable("gui.stacksnotslots.all").getString() : category.displayName())));
+        }
         if (categoryButton != null) {
             String name = category == null ? Component.translatable("gui.stacksnotslots.all").getString() : category.displayName();
             categoryButton.setMessage(Component.literal(font.plainSubstrByWidth(name, categoryButton.getWidth() - 12) + " >"));
@@ -412,6 +446,56 @@ public final class CapacityInventoryScreen extends InventoryScreen {
                 || mouseY < listTop || mouseY >= listTop + visibleRows * ROW_HEIGHT) return null;
         int index = scrollOffset + ((int)mouseY - listTop) / ROW_HEIGHT;
         return index >= 0 && index < visibleEntries.size() ? visibleEntries.get(index) : null;
+    }
+
+    private boolean isOverDrawerList(double mouseX, double mouseY) {
+        if (!drawerOpen) return false;
+        int panelX = leftPos + drawerLocalX + drawerAnimationOffset;
+        return mouseX >= panelX + 4 && mouseX < panelX + drawerWidth - 4
+                && mouseY >= listTop && mouseY < listTop + visibleRows * ROW_HEIGHT;
+    }
+
+    private void renderCompactCategorySelector(GuiGraphics graphics, int mouseX, int mouseY) {
+        hoveredCategory = null;
+        if (compactCategorySelector == null) return;
+        CategoryDefinition selected = currentCategory();
+        graphics.renderItem(CategoryIcons.displayStack(selected), compactCategorySelector.getX() + 2, compactCategorySelector.getY() + 2);
+        if (!categoryMenuOpen) return;
+        List<CategoryDefinition> categories = visibleCategories();
+        if (categories.isEmpty()) return;
+        int x = compactCategorySelector.getX() + 22;
+        for (int offset = -2; offset <= 2; offset++) {
+            int index = Math.floorMod(categoryMenuCenter + offset, categories.size());
+            CategoryDefinition category = categories.get(index);
+            int y = compactCategorySelector.getY() + offset * 19;
+            int alpha = switch (Math.abs(offset)) { case 0 -> 235; case 1 -> 170; default -> 75; };
+            boolean hovered = mouseX >= x && mouseX < x + 20 && mouseY >= y && mouseY < y + 20;
+            graphics.fill(x, y, x + 20, y + 20, ((hovered ? 255 : alpha) << 24) | (hovered ? 0x4F72A5 : 0x202020));
+            float itemAlpha = hovered ? 1.0F : alpha / 255.0F;
+            graphics.setColor(1.0F, 1.0F, 1.0F, itemAlpha);
+            graphics.renderItem(CategoryIcons.displayStack(category), x + 2, y + 2);
+            graphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
+            if (hovered) hoveredCategory = category;
+        }
+    }
+
+    private boolean selectCategoryAt(double mouseX, double mouseY) {
+        List<CategoryDefinition> categories = visibleCategories();
+        if (compactCategorySelector == null || categories.isEmpty()) return false;
+        int x = compactCategorySelector.getX() + 22;
+        for (int offset = -2; offset <= 2; offset++) {
+            int y = compactCategorySelector.getY() + offset * 19;
+            if (mouseX < x || mouseX >= x + 20 || mouseY < y || mouseY >= y + 20) continue;
+            categoryIndex = Math.floorMod(categoryMenuCenter + offset, categories.size());
+            CategoryDefinition category = currentCategory();
+            if (category != null) sortMode = category.sortMode();
+            categoryMenuOpen = false;
+            applyViewPreferences(category);
+            updateButtons();
+            rebuildEntries();
+            return true;
+        }
+        return false;
     }
 
     private static String shortSortName(SortMode mode) {

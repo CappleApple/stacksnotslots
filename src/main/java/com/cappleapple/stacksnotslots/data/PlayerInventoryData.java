@@ -21,6 +21,7 @@ public final class PlayerInventoryData implements INBTSerializable<CompoundTag> 
     private boolean initializedCapacityBase;
     private SortMode inventorySortPreference = SortMode.NAME_ASCENDING;
     private ResourceLocation selectedCategoryPreference;
+    private boolean pickupIntoHotbar = true;
 
     public PlayerInventoryData(Player owner) {
         this.owner = owner;
@@ -38,6 +39,8 @@ public final class PlayerInventoryData implements INBTSerializable<CompoundTag> 
     public void setInventorySortPreference(SortMode preference) { inventorySortPreference = preference; }
     public @Nullable ResourceLocation selectedCategoryPreference() { return selectedCategoryPreference; }
     public void setSelectedCategoryPreference(@Nullable ResourceLocation preference) { selectedCategoryPreference = preference; }
+    public boolean pickupIntoHotbar() { return pickupIntoHotbar; }
+    public void setPickupIntoHotbar(boolean value) { pickupIntoHotbar = value; }
 
     public CompoundTag saveMetadata(HolderLookup.Provider provider) {
         CompoundTag root = new CompoundTag();
@@ -47,6 +50,7 @@ public final class PlayerInventoryData implements INBTSerializable<CompoundTag> 
         root.putBoolean("InitializedCapacityBase", initializedCapacityBase);
         root.putString("InventorySortPreference", inventorySortPreference.name());
         if (selectedCategoryPreference != null) root.putString("SelectedCategoryPreference", selectedCategoryPreference.toString());
+        root.putBoolean("PickupIntoHotbar", pickupIntoHotbar);
         return root;
     }
 
@@ -61,7 +65,7 @@ public final class PlayerInventoryData implements INBTSerializable<CompoundTag> 
     }
 
     private void onInventoryChanged() {
-        if (!owner.level().isClientSide) ModAttachments.markDirty(owner);
+        if (owner != null && !owner.level().isClientSide) ModAttachments.markDirty(owner);
     }
 
     @Override
@@ -74,6 +78,7 @@ public final class PlayerInventoryData implements INBTSerializable<CompoundTag> 
         root.putBoolean("InitializedCapacityBase", initializedCapacityBase);
         root.putString("InventorySortPreference", inventorySortPreference.name());
         if (selectedCategoryPreference != null) root.putString("SelectedCategoryPreference", selectedCategoryPreference.toString());
+        root.putBoolean("PickupIntoHotbar", pickupIntoHotbar);
         return root;
     }
 
@@ -94,5 +99,6 @@ public final class PlayerInventoryData implements INBTSerializable<CompoundTag> 
             inventorySortPreference = SortMode.NAME_ASCENDING;
         }
         selectedCategoryPreference = ResourceLocation.tryParse(root.getString("SelectedCategoryPreference"));
+        pickupIntoHotbar = !root.contains("PickupIntoHotbar") || root.getBoolean("PickupIntoHotbar");
     }
 }

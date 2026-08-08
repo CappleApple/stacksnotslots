@@ -1,14 +1,12 @@
 package com.cappleapple.stacksnotslots.hotbar;
 
-import com.cappleapple.stacksnotslots.api.LogicalInventoryEntry;
 import com.cappleapple.stacksnotslots.category.CategoryDefinition;
 import com.cappleapple.stacksnotslots.category.CategoryMatcher;
 import com.cappleapple.stacksnotslots.category.PlayerCategoryData;
 import com.cappleapple.stacksnotslots.inventory.DynamicCapacityInventory;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
-import java.util.List;
+import java.util.LinkedHashMap;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -17,94 +15,67 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 
+/** Category-cycle metadata. Bindings never own, project, lock, or automatically replace hotbar stacks. */
 public final class HotbarBindings {
     public static final int SLOT_COUNT = 9;
     private final HotbarBinding[] bindings = new HotbarBinding[SLOT_COUNT];
-    private final HotbarBinding[] cachedBindings = new HotbarBinding[SLOT_COUNT];
-    private final ItemStack[] cachedSelections = new ItemStack[SLOT_COUNT];
-    private final long[] cachedInventoryRevisions = new long[SLOT_COUNT];
-    private final long[] cachedCategoryRevisions = new long[SLOT_COUNT];
-    private final int[] cachedBackingIndexes = new int[SLOT_COUNT];
 
     public HotbarBindings() {
         for (int i = 0; i < bindings.length; i++) bindings[i] = HotbarBinding.empty();
-        invalidateAll();
     }
 
     public HotbarBinding get(int slot) { return bindings[checkSlot(slot)]; }
+
     public void set(int slot, HotbarBinding binding) {
-        int checked = checkSlot(slot);
-        bindings[checked] = binding;
-        invalidate(checked);
+        bindings[checkSlot(slot)] = binding.type() == BindingType.CATEGORY
+                ? binding : HotbarBinding.empty();
     }
 
-    public ItemStack resolve(int slot, DynamicCapacityInventory inventory, PlayerCategoryData categories) {
-        HotbarBinding binding = get(slot);
-        if (cachedBindings[slot] == binding && cachedInventoryRevisions[slot] == inventory.revision()
-                && cachedCategoryRevisions[slot] == categories.revision()) {
-            return cachedSelections[slot].copy();
-        }
-        List<ItemStack> candidates = candidates(binding, inventory, categories);
-        if (candidates.isEmpty()) {
-            cache(slot, binding, inventory, categories, ItemStack.EMPTY);
-            return ItemStack.EMPTY;
-        }
-        if (binding.selectedEntry() != null) {
-            for (ItemStack candidate : candidates) {
-                if (binding.selectedEntry().matches(candidate)) {
-                    cache(slot, binding, inventory, categories, candidate);
-                    return candidate.copy();
-                }
-            }
-        }
-        ItemStack selected = candidates.getFirst();
-        bindings[slot] = binding.withSelected(selected);
-        cache(slot, bindings[slot], inventory, categories, selected);
-        return selected.copy();
-    }
-
-    /** Resolves a stable backing index for vanilla held-item access until the inventory revision changes. */
-    public int resolveIndex(int slot, DynamicCapacityInventory inventory, PlayerCategoryData categories) {
-        resolve(slot, inventory, categories);
-        return cachedBackingIndexes[checkSlot(slot)];
-    }
-
+    /**
+     * On an explicit cycle key press, swaps the selected hotbar position with the next distinct
+     * matching backend/main-grid stack. Other interactions are completely unaffected by bindings.
+     */
     public ItemStack cycle(int slot, int direction, DynamicCapacityInventory inventory, PlayerCategoryData categories) {
         HotbarBinding binding = get(slot);
-        List<ItemStack> candidates = candidates(binding, inventory, categories);
-        if (candidates.isEmpty()) return ItemStack.EMPTY;
-        int current = -1;
-        for (int i = 0; i < candidates.size(); i++) {
-            if (binding.selectedEntry() != null && binding.selectedEntry().matches(candidates.get(i))) { current = i; break; }
+        if (binding.type() != BindingType.CATEGORY || binding.target() == null) {
+            return inventory.syntheticStack(slot);
         }
-        int next = Math.floorMod(current + (direction < 0 ? -1 : 1), candidates.size());
-        ItemStack selected = candidates.get(next);
-        bindings[slot] = binding.withSelected(selected);
-        invalidate(slot);
-        return selected.copy();
-    }
+        CategoryDefinition category = categories.find(binding.target());
+        if (category == null || !category.enabled()) return inventory.syntheticStack(slot);
 
-    private static List<ItemStack> candidates(HotbarBinding binding, DynamicCapacityInventory inventory, PlayerCategoryData categories) {
-        ArrayList<LogicalInventoryEntry> matchingEntries = new ArrayList<>();
-        if (binding.type() == BindingType.EMPTY || binding.target() == null) return List.of();
-        CategoryDefinition category = binding.type() == BindingType.CATEGORY ? categories.find(binding.target()) : null;
-        for (LogicalInventoryEntry entry : inventory.entries()) {
-            ItemStack stack = entry.representative();
-            boolean entryMatches = switch (binding.type()) {
-                case ITEM -> BuiltInRegistries.ITEM.getKey(stack.getItem()).equals(binding.target());
-                case CATEGORY -> category != null && CategoryMatcher.matches(category, stack);
-                case FILTER -> BuiltInRegistries.ITEM.getKey(stack.getItem()).toString().contains(binding.target().getPath());
-                case EMPTY -> false;
-            };
-            if (entryMatches) matchingEntries.add(entry);
+        LinkedHashMap<StackIdentity, Candidate> distinct = new LinkedHashMap<>();
+        ItemStack currentStack = inventory.syntheticStack(slot);
+        if (CategoryMatcher.matches(category, currentStack)) {
+            distinct.put(new StackIdentity(currentStack), new Candidate(slot, currentStack));
         }
-        // Registry IDs give client and dedicated server the same order regardless of language settings.
-        matchingEntries.sort(Comparator.comparing(
-                entry -> BuiltInRegistries.ITEM.getKey(entry.representative().getItem()).toString()));
-        return matchingEntries.stream().map(entry -> {
-            ItemStack stack = entry.representative();
-            return stack.copyWithCount((int)Math.min(entry.quantity(), stack.getMaxStackSize()));
-        }).toList();
+        for (int index = 9; index < inventory.syntheticSlotCount(); index++) {
+            ItemStack candidate = inventory.syntheticStack(index);
+            if (!CategoryMatcher.matches(category, candidate)) continue;
+            distinct.putIfAbsent(new StackIdentity(candidate), new Candidate(index, candidate));
+        }
+        if (distinct.isEmpty()) return currentStack;
+
+        ArrayList<Candidate> candidates = new ArrayList<>(distinct.values());
+        candidates.sort(Comparator
+                .comparing((Candidate candidate) -> BuiltInRegistries.ITEM.getKey(candidate.stack().getItem()).toString())
+                .thenComparingInt(candidate -> ItemStack.hashItemAndComponents(candidate.stack())));
+        int current = -1;
+        for (int index = 0; index < candidates.size(); index++) {
+            ItemStack candidate = candidates.get(index).stack();
+            if (binding.selectedEntry() != null && binding.selectedEntry().matches(candidate)
+                    || binding.selectedEntry() == null && ItemStack.isSameItemSameComponents(currentStack, candidate)) {
+                current = index;
+                break;
+            }
+        }
+        int next = current < 0
+                ? (direction < 0 ? candidates.size() - 1 : 0)
+                : Math.floorMod(current + (direction < 0 ? -1 : 1), candidates.size());
+        Candidate selected = candidates.get(next);
+        if (selected.index() != slot) inventory.swapSyntheticSlots(slot, selected.index());
+        ItemStack result = inventory.syntheticStack(slot);
+        bindings[slot] = binding.withSelected(result);
+        return result;
     }
 
     public CompoundTag save(HolderLookup.Provider provider) {
@@ -129,54 +100,35 @@ public final class HotbarBindings {
         for (int i = 0; i < list.size(); i++) {
             CompoundTag tag = list.getCompound(i);
             int slot = tag.getByte("Slot");
-            if (slot < 0 || slot >= SLOT_COUNT) continue;
-            BindingType type;
-            try { type = BindingType.valueOf(tag.getString("Type")); }
-            catch (IllegalArgumentException ignored) { type = BindingType.EMPTY; }
+            if (slot < 0 || slot >= SLOT_COUNT || !BindingType.CATEGORY.name().equals(tag.getString("Type"))) continue;
+            ResourceLocation target = ResourceLocation.tryParse(tag.getString("Target"));
+            if (target == null) continue;
             StackReference selected = tag.contains("SelectedEntry", Tag.TAG_COMPOUND)
                     ? StackReference.load(provider, tag.getCompound("SelectedEntry")).orElse(null)
                     : null;
-            if (selected == null && tag.contains("Selected", Tag.TAG_STRING)) {
-                ResourceLocation legacySelected = ResourceLocation.tryParse(tag.getString("Selected"));
-                if (legacySelected != null) {
-                    selected = BuiltInRegistries.ITEM.getOptional(legacySelected)
-                            .map(item -> item.getDefaultInstance())
-                            .filter(stack -> !stack.isEmpty())
-                            .map(StackReference::of)
-                            .orElse(null);
-                }
-            }
-            bindings[slot] = new HotbarBinding(type, ResourceLocation.tryParse(tag.getString("Target")), selected);
+            bindings[slot] = new HotbarBinding(BindingType.CATEGORY, target, selected);
         }
-        invalidateAll();
-    }
-
-    private void cache(int slot, HotbarBinding binding, DynamicCapacityInventory inventory, PlayerCategoryData categories, ItemStack selected) {
-        cachedBindings[slot] = binding;
-        cachedInventoryRevisions[slot] = inventory.revision();
-        cachedCategoryRevisions[slot] = categories.revision();
-        cachedSelections[slot] = selected.copy();
-        cachedBackingIndexes[slot] = selected.isEmpty() ? -1 : inventory.indexOf(selected);
-    }
-
-    private void invalidate(int slot) {
-        cachedBindings[slot] = null;
-        cachedSelections[slot] = ItemStack.EMPTY;
-        cachedInventoryRevisions[slot] = Long.MIN_VALUE;
-        cachedCategoryRevisions[slot] = Long.MIN_VALUE;
-        cachedBackingIndexes[slot] = -1;
-    }
-
-    private void invalidateAll() {
-        Arrays.fill(cachedBindings, null);
-        Arrays.fill(cachedSelections, ItemStack.EMPTY);
-        Arrays.fill(cachedInventoryRevisions, Long.MIN_VALUE);
-        Arrays.fill(cachedCategoryRevisions, Long.MIN_VALUE);
-        Arrays.fill(cachedBackingIndexes, -1);
     }
 
     private static int checkSlot(int slot) {
         if (slot < 0 || slot >= SLOT_COUNT) throw new IndexOutOfBoundsException("Hotbar slot " + slot);
         return slot;
+    }
+
+    private record Candidate(int index, ItemStack stack) {}
+
+    private static final class StackIdentity {
+        private final ItemStack stack;
+        private final int hash;
+
+        private StackIdentity(ItemStack stack) {
+            this.stack = stack.copyWithCount(1);
+            this.hash = ItemStack.hashItemAndComponents(stack);
+        }
+
+        @Override public int hashCode() { return hash; }
+        @Override public boolean equals(Object other) {
+            return other instanceof StackIdentity identity && ItemStack.isSameItemSameComponents(stack, identity.stack);
+        }
     }
 }

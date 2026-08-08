@@ -10,6 +10,7 @@ public final class ClientKeyMappings {
     public static final KeyMapping FOCUS_SEARCH = new KeyMapping("key.stacksnotslots.focus_search", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_F, CATEGORY);
     public static final KeyMapping CYCLE_FORWARD = new KeyMapping("key.stacksnotslots.cycle_forward", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_RIGHT_BRACKET, CATEGORY);
     public static final KeyMapping CYCLE_BACKWARD = new KeyMapping("key.stacksnotslots.cycle_backward", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_LEFT_BRACKET, CATEGORY);
+    public static final KeyMapping STOW_MODIFIER = new KeyMapping("key.stacksnotslots.stow_modifier", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_LEFT_CONTROL, CATEGORY);
 
     private ClientKeyMappings() {}
 
@@ -17,5 +18,6 @@ public final class ClientKeyMappings {
         event.register(FOCUS_SEARCH);
         event.register(CYCLE_FORWARD);
         event.register(CYCLE_BACKWARD);
+        event.register(STOW_MODIFIER);
     }
 }

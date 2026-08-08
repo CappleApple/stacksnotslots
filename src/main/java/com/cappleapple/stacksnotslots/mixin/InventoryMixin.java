@@ -3,11 +3,6 @@ package com.cappleapple.stacksnotslots.mixin;
 import com.cappleapple.stacksnotslots.api.InsertionResult;
 import com.cappleapple.stacksnotslots.data.ModAttachments;
 import com.cappleapple.stacksnotslots.data.PlayerInventoryData;
-import com.cappleapple.stacksnotslots.hotbar.BindingType;
-import com.cappleapple.stacksnotslots.hotbar.HotbarBinding;
-import com.cappleapple.stacksnotslots.category.CategoryMatcher;
-import com.cappleapple.stacksnotslots.compat.InventoryProjection;
-import com.cappleapple.stacksnotslots.network.ModNetwork;
 import com.cappleapple.stacksnotslots.inventory.DynamicCapacityInventory;
 import com.cappleapple.stacksnotslots.inventory.InsertionContext;
 import com.cappleapple.stacksnotslots.inventory.InventoryTransactions;
@@ -20,8 +15,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.player.StackedContents;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -32,14 +25,11 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-/** Keeps vanilla's 36 item indices as a projection window; the logical collection remains authoritative. */
+/** Keeps vanilla's 36 item indices as stable compatibility positions; backend storage remains dynamic. */
 @Mixin(Inventory.class)
 public abstract class InventoryMixin {
     @Shadow @Final public Player player;
     @Shadow @Final public NonNullList<ItemStack> items;
-    @Unique private int[] sns$projection = new int[0];
-    @Unique private long sns$projectionInventoryRevision = Long.MIN_VALUE;
-    @Unique private int sns$projectionStateHash;
 
     @Unique
     private PlayerInventoryData sns$data() { return player.getData(ModAttachments.PLAYER_DATA); }
@@ -49,25 +39,12 @@ public abstract class InventoryMixin {
 
     @Unique
     private int sns$logicalIndex(int vanillaSlot) {
-        if (vanillaSlot < 0 || vanillaSlot >= Inventory.INVENTORY_SIZE) return vanillaSlot;
-        PlayerInventoryData data = sns$data();
-        int stateHash = InventoryProjection.stateHash(data);
-        if (sns$projection.length != Inventory.INVENTORY_SIZE
-                || sns$projectionInventoryRevision != data.inventory().revision()
-                || sns$projectionStateHash != stateHash) {
-            sns$projection = InventoryProjection.build(data);
-            sns$projectionInventoryRevision = data.inventory().revision();
-            sns$projectionStateHash = InventoryProjection.stateHash(data);
-        }
-        return sns$projection[vanillaSlot];
+        return vanillaSlot;
     }
 
     @Unique
     private int sns$vanillaSlotForLogical(int logicalIndex) {
-        for (int slot = 0; slot < Inventory.INVENTORY_SIZE; slot++) {
-            if (sns$logicalIndex(slot) == logicalIndex) return slot;
-        }
-        return -1;
+        return logicalIndex >= 0 && logicalIndex < Inventory.INVENTORY_SIZE ? logicalIndex : -1;
     }
 
     @Inject(method = "getItem", at = @At("HEAD"), cancellable = true)
@@ -87,27 +64,8 @@ public abstract class InventoryMixin {
         if (!sns$active() || slot < 0 || slot >= Inventory.INVENTORY_SIZE) return;
         DynamicCapacityInventory inventory = sns$data().inventory();
         int index = sns$logicalIndex(slot);
-        if (index < 0) index = inventory.firstEmptySyntheticSlot(Integer.MAX_VALUE);
         inventory.replaceSyntheticSlotFromItemUse(index, stack);
-        sns$followHeldItemReplacement(slot, stack);
         callback.cancel();
-    }
-
-    @Unique
-    private void sns$followHeldItemReplacement(int vanillaSlot, ItemStack replacement) {
-        if (vanillaSlot < 0 || vanillaSlot >= 9 || replacement.isEmpty()) return;
-        HotbarBinding binding = sns$data().hotbar().get(vanillaSlot);
-        HotbarBinding updated = switch (binding.type()) {
-            case ITEM -> new HotbarBinding(BindingType.ITEM, BuiltInRegistries.ITEM.getKey(replacement.getItem()), null).withSelected(replacement);
-            case CATEGORY -> {
-                var category = sns$data().categories().find(binding.target());
-                yield category != null && CategoryMatcher.matches(category, replacement) ? binding.withSelected(replacement) : binding;
-            }
-            case FILTER, EMPTY -> binding;
-        };
-        if (updated == binding) return;
-        sns$data().hotbar().set(vanillaSlot, updated);
-        if (player instanceof ServerPlayer serverPlayer) ModNetwork.sendMetadata(serverPlayer);
     }
 
     @Inject(method = "add(Lnet/minecraft/world/item/ItemStack;)Z", at = @At("HEAD"), cancellable = true)
@@ -120,8 +78,8 @@ public abstract class InventoryMixin {
 
     @Inject(method = "add(ILnet/minecraft/world/item/ItemStack;)Z", at = @At("HEAD"), cancellable = true)
     private void sns$addAt(int slot, ItemStack stack, CallbackInfoReturnable<Boolean> callback) {
-        if (!sns$active()) return;
-        InsertionResult result = InventoryTransactions.insert(player, stack, InsertionContext.MANUAL_TRANSFER, false);
+        if (!sns$active() || slot < 0 || slot >= Inventory.INVENTORY_SIZE) return;
+        InsertionResult result = InventoryTransactions.insertIntoSyntheticSlot(player, stack, sns$logicalIndex(slot), false);
         stack.setCount(result.remainder().getCount());
         callback.setReturnValue(result.acceptedAnything());
     }
@@ -155,7 +113,14 @@ public abstract class InventoryMixin {
 
     @Inject(method = "getFreeSlot", at = @At("HEAD"), cancellable = true)
     private void sns$getFreeSlot(CallbackInfoReturnable<Integer> callback) {
-        if (sns$active()) callback.setReturnValue(sns$data().inventory().firstEmptySyntheticSlot(Inventory.INVENTORY_SIZE));
+        if (!sns$active()) return;
+        for (int slot = 0; slot < Inventory.INVENTORY_SIZE; slot++) {
+            if (sns$data().inventory().syntheticStack(slot).isEmpty()) {
+                callback.setReturnValue(slot);
+                return;
+            }
+        }
+        callback.setReturnValue(-1);
     }
 
     @Inject(method = "findSlotMatchingItem", at = @At("HEAD"), cancellable = true)

@@ -11,6 +11,8 @@ public final class ClientConfig {
     public static final ModConfigSpec.EnumValue<PickupNotification> PICKUP_NOTIFICATION;
     public static final ModConfigSpec.BooleanValue TOOLTIP_INDEXING;
     public static final ModConfigSpec.BooleanValue HOTBAR_CYCLE_OVERLAY;
+    public static final ModConfigSpec.IntValue CATEGORY_SELECTOR_X;
+    public static final ModConfigSpec.IntValue CATEGORY_SELECTOR_Y;
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -18,6 +20,10 @@ public final class ClientConfig {
         PICKUP_NOTIFICATION = builder.defineEnum("pickupLimitNotification", PickupNotification.HUD);
         TOOLTIP_INDEXING = builder.define("enableSearchTooltipIndexing", true);
         HOTBAR_CYCLE_OVERLAY = builder.define("enableHotbarCycleOverlay", true);
+        CATEGORY_SELECTOR_X = builder.comment("Category selector X offset from the vanilla inventory's left edge")
+                .defineInRange("categorySelectorX", 134, -256, 512);
+        CATEGORY_SELECTOR_Y = builder.comment("Category selector Y offset from the vanilla inventory's top edge")
+                .defineInRange("categorySelectorY", 61, -256, 512);
         SPEC = builder.build();
     }
 

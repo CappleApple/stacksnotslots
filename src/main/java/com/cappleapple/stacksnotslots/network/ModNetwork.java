@@ -7,10 +7,12 @@ import com.cappleapple.stacksnotslots.client.ClientTransientState;
 import com.cappleapple.stacksnotslots.category.CategoryDefinition;
 import com.cappleapple.stacksnotslots.category.CategoryPresetManager;
 import com.cappleapple.stacksnotslots.category.PlayerCategoryData;
+import com.cappleapple.stacksnotslots.compat.InventoryProjection;
 import com.cappleapple.stacksnotslots.api.ExtractionResult;
 import com.cappleapple.stacksnotslots.hotbar.BindingType;
 import com.cappleapple.stacksnotslots.hotbar.HotbarBinding;
 import com.cappleapple.stacksnotslots.config.ClientConfig;
+import com.cappleapple.stacksnotslots.inventory.InventoryTransactions;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
 import java.util.ArrayList;
@@ -23,7 +25,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -47,7 +48,7 @@ public final class ModNetwork {
     private ModNetwork() {}
 
     public static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar("2");
+        var registrar = event.registrar("3");
         registrar.playToClient(InventorySnapshotPayload.TYPE, InventorySnapshotPayload.STREAM_CODEC, ModNetwork::receiveSnapshot);
         registrar.playToClient(InventoryDeltaPayload.TYPE, InventoryDeltaPayload.STREAM_CODEC, ModNetwork::receiveDelta);
         registrar.playToClient(PlayerMetadataPayload.TYPE, PlayerMetadataPayload.STREAM_CODEC, ModNetwork::receiveMetadata);
@@ -58,6 +59,8 @@ public final class ModNetwork {
         registrar.playToServer(CategoryEditPayload.TYPE, CategoryEditPayload.STREAM_CODEC, ModNetwork::editCategory);
         registrar.playToServer(HotbarBindPayload.TYPE, HotbarBindPayload.STREAM_CODEC, ModNetwork::bindHotbar);
         registrar.playToServer(InventoryViewPreferencesPayload.TYPE, InventoryViewPreferencesPayload.STREAM_CODEC, ModNetwork::updateViewPreferences);
+        registrar.playToServer(StowSlotPayload.TYPE, StowSlotPayload.STREAM_CODEC, ModNetwork::stowSlot);
+        registrar.playToServer(PickupToHotbarPayload.TYPE, PickupToHotbarPayload.STREAM_CODEC, ModNetwork::updatePickupToHotbar);
         registrar.playToClient(PickupFeedbackPayload.TYPE, PickupFeedbackPayload.STREAM_CODEC, ModNetwork::pickupFeedback);
     }
 
@@ -239,8 +242,7 @@ public final class ModNetwork {
         if (!(context.player() instanceof ServerPlayer player) || !allowAction(player) || payload.slot() < 0 || payload.slot() >= 9) return;
         PlayerInventoryData data = player.getData(ModAttachments.PLAYER_DATA);
         if (payload.bindingType() == BindingType.CATEGORY && data.categories().find(payload.target()) == null) return;
-        if (payload.bindingType() == BindingType.ITEM && BuiltInRegistries.ITEM.getOptional(payload.target()).isEmpty()) return;
-        if (payload.bindingType() != BindingType.EMPTY && payload.bindingType() != BindingType.ITEM && payload.bindingType() != BindingType.CATEGORY) return;
+        if (payload.bindingType() != BindingType.EMPTY && payload.bindingType() != BindingType.CATEGORY) return;
         data.hotbar().set(payload.slot(), payload.bindingType() == BindingType.EMPTY
                 ? HotbarBinding.empty()
                 : new HotbarBinding(payload.bindingType(), payload.target(), null));
@@ -254,6 +256,34 @@ public final class ModNetwork {
         if (payload.selectedCategory() != null && data.categories().find(payload.selectedCategory()) == null) return;
         data.setInventorySortPreference(payload.sortMode());
         data.setSelectedCategoryPreference(payload.selectedCategory());
+        InventoryProjection.applyExplicitView(data);
+        sendMetadata(player);
+        player.inventoryMenu.broadcastChanges();
+    }
+
+    private static void stowSlot(StowSlotPayload payload, IPayloadContext context) {
+        if (!(context.player() instanceof ServerPlayer player) || !allowAction(player)
+                || payload.slot() < -1 || payload.slot() >= 36) return;
+        PlayerInventoryData data = player.getData(ModAttachments.PLAYER_DATA);
+        if (payload.slot() >= 0) {
+            if (player.containerMenu != player.inventoryMenu) return;
+            if (data.inventory().stowSyntheticSlot(payload.slot())) player.inventoryMenu.broadcastChanges();
+            return;
+        }
+
+        ItemStack carried = player.containerMenu.getCarried();
+        if (carried.isEmpty()) return;
+        var insertion = InventoryTransactions.insertIntoBackend(player, carried, false);
+        if (!insertion.acceptedAnything()) return;
+        carried.shrink(insertion.acceptedAmount());
+        if (carried.isEmpty()) player.containerMenu.setCarried(ItemStack.EMPTY);
+        player.containerMenu.broadcastChanges();
+    }
+
+    private static void updatePickupToHotbar(PickupToHotbarPayload payload, IPayloadContext context) {
+        if (!(context.player() instanceof ServerPlayer player) || !allowAction(player)) return;
+        PlayerInventoryData data = player.getData(ModAttachments.PLAYER_DATA);
+        data.setPickupIntoHotbar(payload.enabled());
         sendMetadata(player);
     }
 

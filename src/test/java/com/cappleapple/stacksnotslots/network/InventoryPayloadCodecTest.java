@@ -82,6 +82,20 @@ class InventoryPayloadCodecTest {
         }
     }
 
+    @Test
+    void stowAndPickupPreferencePayloadsRoundTrip() {
+        RegistryFriendlyByteBuf buffer = createBuffer();
+        try {
+            StowSlotPayload.STREAM_CODEC.encode(buffer, new StowSlotPayload(-1));
+            PickupToHotbarPayload.STREAM_CODEC.encode(buffer, new PickupToHotbarPayload(false));
+            buffer.readerIndex(0);
+            assertEquals(-1, StowSlotPayload.STREAM_CODEC.decode(buffer).slot());
+            assertTrue(!PickupToHotbarPayload.STREAM_CODEC.decode(buffer).enabled());
+        } finally {
+            buffer.release();
+        }
+    }
+
     private static RegistryFriendlyByteBuf createBuffer() {
         RegistryAccess.Frozen access = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
         return new RegistryFriendlyByteBuf(Unpooled.buffer(), access);

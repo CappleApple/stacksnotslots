@@ -25,47 +25,45 @@ class HotbarBindingsTest {
     @BeforeAll static void bootstrap() { SharedConstants.tryDetectVersion(); Bootstrap.bootStrap(); }
 
     @Test
-    void categoryBindingsCycleAndRecoverWhenSelectionDisappears() {
+    void categoryCycleSwapsOnlyTheRequestedHotbarSlotOnKeyPress() {
         DynamicCapacityInventory inventory = new DynamicCapacityInventory(() -> 512);
-        inventory.insert(new ItemStack(Items.COBBLESTONE, 8), false);
-        inventory.insert(new ItemStack(Items.STONE, 8), false);
-        PlayerCategoryData categories = new PlayerCategoryData();
-        ResourceLocation categoryId = ResourceLocation.fromNamespaceAndPath("stacksnotslots", "building");
-        categories.replaceAll(List.of(new CategoryDefinition(categoryId, "Building", BuiltInRegistries.ITEM.getKey(Items.STONE), 0,
-                List.of(new CategoryRule(CategoryRule.Type.ITEM, BuiltInRegistries.ITEM.getKey(Items.COBBLESTONE)),
-                        new CategoryRule(CategoryRule.Type.ITEM, BuiltInRegistries.ITEM.getKey(Items.STONE))),
-                List.of(), -1, SortMode.NAME_ASCENDING, true, false)), true);
+        inventory.replaceSyntheticSlot(0, new ItemStack(Items.COBBLESTONE, 8));
+        inventory.replaceSyntheticSlot(1, new ItemStack(Items.APPLE));
+        inventory.replaceSyntheticSlot(9, new ItemStack(Items.STONE, 8));
+        PlayerCategoryData categories = buildingCategories();
+        ResourceLocation categoryId = categories.categories().getFirst().id();
         HotbarBindings hotbar = new HotbarBindings();
         hotbar.set(0, new HotbarBinding(BindingType.CATEGORY, categoryId, null));
-        hotbar.set(1, new HotbarBinding(BindingType.CATEGORY, categoryId, null));
 
-        ItemStack first = hotbar.resolve(0, inventory, categories);
         ItemStack cycled = hotbar.cycle(0, 1, inventory, categories);
-        assertTrue(!ItemStack.isSameItemSameComponents(first, cycled));
-        assertEquals(first.getItem(), hotbar.resolve(1, inventory, categories).getItem());
-        inventory.extract(cycled, Integer.MAX_VALUE, false);
-        assertEquals(first.getItem(), hotbar.resolve(0, inventory, categories).getItem());
+        assertEquals(Items.STONE, cycled.getItem());
+        assertEquals(Items.STONE, inventory.syntheticStack(0).getItem());
+        assertEquals(Items.COBBLESTONE, inventory.syntheticStack(9).getItem());
+        assertEquals(Items.APPLE, inventory.syntheticStack(1).getItem());
+
+        inventory.replaceSyntheticSlot(0, new ItemStack(Items.DIAMOND));
+        assertEquals(Items.DIAMOND, inventory.syntheticStack(0).getItem());
+        assertEquals(BindingType.CATEGORY, hotbar.get(0).type());
+        assertEquals(Items.COBBLESTONE, hotbar.cycle(0, 1, inventory, categories).getItem());
+        assertEquals(Items.APPLE, inventory.syntheticStack(1).getItem());
     }
 
     @Test
-    void exactBindingOwnsNoStack() {
-        DynamicCapacityInventory inventory = new DynamicCapacityInventory(() -> 64);
-        inventory.insert(new ItemStack(Items.APPLE, 3), false);
+    void exactItemBindingsAreDiscardedAndCannotLockAHotbarSlot() {
         HotbarBindings hotbar = new HotbarBindings();
         hotbar.set(0, new HotbarBinding(BindingType.ITEM, BuiltInRegistries.ITEM.getKey(Items.APPLE), null));
-        assertEquals(3, hotbar.resolve(0, inventory, new PlayerCategoryData()).getCount());
-        assertEquals(3, inventory.entries().getFirst().quantity());
+        assertEquals(BindingType.EMPTY, hotbar.get(0).type());
     }
 
     @Test
     void categoryMemoryDistinguishesComponentsAndSurvivesPersistence() {
-        DynamicCapacityInventory inventory = new DynamicCapacityInventory(() -> 128);
+        DynamicCapacityInventory inventory = new DynamicCapacityInventory(() -> 256);
         ItemStack first = new ItemStack(Items.PAPER);
         first.set(DataComponents.CUSTOM_NAME, Component.literal("A"));
         ItemStack second = new ItemStack(Items.PAPER);
         second.set(DataComponents.CUSTOM_NAME, Component.literal("B"));
-        inventory.insert(first, false);
-        inventory.insert(second, false);
+        inventory.replaceSyntheticSlot(0, first);
+        inventory.replaceSyntheticSlot(9, second);
 
         ResourceLocation paper = BuiltInRegistries.ITEM.getKey(Items.PAPER);
         ResourceLocation categoryId = ResourceLocation.fromNamespaceAndPath("stacksnotslots", "papers");
@@ -75,13 +73,23 @@ class HotbarBindingsTest {
                 SortMode.NAME_ASCENDING, true, false)), true);
         HotbarBindings hotbar = new HotbarBindings();
         hotbar.set(0, new HotbarBinding(BindingType.CATEGORY, categoryId, null));
-        ItemStack initiallySelected = hotbar.resolve(0, inventory, categories);
         ItemStack cycled = hotbar.cycle(0, 1, inventory, categories);
-        assertTrue(!ItemStack.isSameItemSameComponents(initiallySelected, cycled));
+        assertTrue(ItemStack.isSameItemSameComponents(second, cycled));
 
         RegistryAccess.Frozen access = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
         HotbarBindings loaded = new HotbarBindings();
         loaded.load(access, hotbar.save(access));
-        assertTrue(ItemStack.isSameItemSameComponents(cycled, loaded.resolve(0, inventory, categories)));
+        assertTrue(loaded.get(0).selectedEntry().matches(cycled));
+        assertEquals(BindingType.CATEGORY, loaded.get(0).type());
+    }
+
+    private static PlayerCategoryData buildingCategories() {
+        PlayerCategoryData categories = new PlayerCategoryData();
+        ResourceLocation categoryId = ResourceLocation.fromNamespaceAndPath("stacksnotslots", "building");
+        categories.replaceAll(List.of(new CategoryDefinition(categoryId, "Building", BuiltInRegistries.ITEM.getKey(Items.STONE), 0,
+                List.of(new CategoryRule(CategoryRule.Type.ITEM, BuiltInRegistries.ITEM.getKey(Items.COBBLESTONE)),
+                        new CategoryRule(CategoryRule.Type.ITEM, BuiltInRegistries.ITEM.getKey(Items.STONE))),
+                List.of(), -1, SortMode.NAME_ASCENDING, true, false)), true);
+        return categories;
     }
 }

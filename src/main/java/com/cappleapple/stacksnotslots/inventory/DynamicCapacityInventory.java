@@ -168,8 +168,19 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
 
     @Override
     public InsertionResult insert(ItemStack stack, boolean simulate) {
+        return insertAtOrAfter(stack, 0, simulate);
+    }
+
+    /**
+     * Inserts without touching compatibility slots below {@code minimumSlot}. This is used for
+     * pickup-to-hotbar preferences and explicit backend stowing; capacity remains the only limit.
+     */
+    public InsertionResult insertAtOrAfter(ItemStack stack, int minimumSlot, boolean simulate) {
         if (stack == null || stack.isEmpty() || stack.getCount() <= 0) {
             return new InsertionResult(stack == null ? 0 : Math.max(0, stack.getCount()), 0, ItemStack.EMPTY, 0, InsertionRejection.INVALID_ITEM);
+        }
+        if (minimumSlot < 0 || minimumSlot == Integer.MAX_VALUE) {
+            return rejected(stack, stack.getCount(), InsertionRejection.INVALID_ITEM);
         }
         int requested = stack.getCount();
         long unitCost = CapacityCosts.unitCost(stack);
@@ -182,13 +193,80 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
             return rejected(stack, requested, InsertionRejection.GLOBAL_CAPACITY);
         }
         if (!simulate) {
-            addLegalStacks(stack, accepted);
+            addLegalStacks(stack, accepted, minimumSlot);
             usedCapacity = saturatedAdd(usedCapacity, CapacityCosts.cost(stack, accepted));
             changed();
         }
         ItemStack remainder = accepted == requested ? ItemStack.EMPTY : stack.copyWithCount(requested - accepted);
         InsertionRejection rejection = accepted == requested ? InsertionRejection.NONE : InsertionRejection.GLOBAL_CAPACITY;
         return new InsertionResult(requested, accepted, remainder, CapacityCosts.cost(stack, accepted), rejection);
+    }
+
+    /** Moves a visible stack wholly behind the vanilla 36-slot window without changing ownership or capacity. */
+    public boolean stowSyntheticSlot(int sourceSlot) {
+        if (sourceSlot < 0 || sourceSlot >= Math.min(36, backingStacks.size())) return false;
+        ItemStack source = backingStacks.get(sourceSlot);
+        if (source.isEmpty()) return false;
+        backingStacks.set(sourceSlot, ItemStack.EMPTY);
+        addLegalStacks(source, source.getCount(), 36);
+        recalculateCapacity();
+        changed();
+        return true;
+    }
+
+    /** Atomically swaps two compatibility positions. Used only by an explicit hotbar-cycle key press. */
+    public void swapSyntheticSlots(int first, int second) {
+        if (first < 0 || second < 0 || first == Integer.MAX_VALUE || second == Integer.MAX_VALUE) {
+            throw new IndexOutOfBoundsException("Synthetic slot swap " + first + " <-> " + second);
+        }
+        if (first == second) return;
+        ensureSyntheticSlot(Math.max(first, second));
+        ItemStack value = backingStacks.get(first);
+        backingStacks.set(first, backingStacks.get(second));
+        backingStacks.set(second, value);
+        trimTrailingEmptySlots();
+        recalculateCapacity();
+        changed();
+    }
+
+    /**
+     * Applies a user-requested category/sort view once. Hotbar slots 0-8 are retained verbatim,
+     * the requested distinct representatives fill slots 9-35, and everything else remains owned
+     * in dynamically growing backend slots.
+     */
+    public void arrangeMainGrid(List<Integer> preferredBackingIndexes) {
+        ArrayList<ItemStack> original = new ArrayList<>(backingStacks);
+        boolean[] consumed = new boolean[original.size()];
+        ArrayList<ItemStack> arranged = new ArrayList<>(Math.max(36, original.size()));
+
+        for (int slot = 0; slot < 9; slot++) {
+            ItemStack stack = slot < original.size() ? original.get(slot) : ItemStack.EMPTY;
+            arranged.add(stack);
+            if (slot < consumed.length && !stack.isEmpty()) consumed[slot] = true;
+        }
+
+        int visible = 0;
+        for (int index : preferredBackingIndexes) {
+            if (visible >= 27) break;
+            if (index < 9 || index >= original.size() || consumed[index]) continue;
+            ItemStack stack = original.get(index);
+            if (stack.isEmpty()) continue;
+            arranged.add(stack);
+            consumed[index] = true;
+            visible++;
+        }
+        while (arranged.size() < 36) arranged.add(ItemStack.EMPTY);
+
+        for (int index = 9; index < original.size(); index++) {
+            ItemStack stack = original.get(index);
+            if (!consumed[index] && !stack.isEmpty()) arranged.add(stack);
+        }
+
+        backingStacks.clear();
+        backingStacks.addAll(arranged);
+        trimTrailingEmptySlots();
+        recalculateCapacity();
+        changed();
     }
 
     public InsertionResult insertAtMost(ItemStack stack, int maximumAccepted, InsertionRejection limitingReason, boolean simulate) {
@@ -318,7 +396,7 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
         boolean imported = false;
         for (ItemStack stack : stacks) {
             if (stack.isEmpty()) continue;
-            addLegalStacks(stack, stack.getCount());
+            addLegalStacks(stack, stack.getCount(), 0);
             imported = true;
         }
         if (imported) {
@@ -342,7 +420,7 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
             if (stack.getCount() <= stack.getMaxStackSize()) continue;
             int excess = stack.getCount() - stack.getMaxStackSize();
             stack.setCount(stack.getMaxStackSize());
-            addLegalStacks(stack, excess);
+            addLegalStacks(stack, excess, 0);
             normalized = true;
         }
         normalized |= trimTrailingEmptySlots();
@@ -475,11 +553,12 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
         }
     }
 
-    private void addLegalStacks(ItemStack incoming, int amount) {
+    private void addLegalStacks(ItemStack incoming, int amount, int minimumSlot) {
         int remaining = amount;
         if (incoming.isStackable()) {
-            for (ItemStack stored : backingStacks) {
+            for (int slot = minimumSlot; slot < backingStacks.size(); slot++) {
                 if (remaining == 0) break;
+                ItemStack stored = backingStacks.get(slot);
                 if (stored.isEmpty()) continue;
                 if (!ItemStack.isSameItemSameComponents(stored, incoming)) continue;
                 int moved = Math.min(remaining, stored.getMaxStackSize() - stored.getCount());
@@ -491,7 +570,11 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
         }
         while (remaining > 0) {
             int moved = Math.min(remaining, incoming.getMaxStackSize());
-            int vacant = firstCanonicalEmptySlot();
+            int vacant = firstCanonicalEmptySlot(minimumSlot);
+            if (vacant < 0 && backingStacks.size() < minimumSlot) {
+                ensureSyntheticSlot(minimumSlot);
+                vacant = minimumSlot;
+            }
             if (vacant < 0) backingStacks.add(incoming.copyWithCount(moved));
             else backingStacks.set(vacant, incoming.copyWithCount(moved));
             remaining -= moved;
@@ -499,8 +582,8 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
     }
 
     /** Avoids reusing a live reference that vanilla has temporarily shrunk to zero mid-transaction. */
-    private int firstCanonicalEmptySlot() {
-        for (int slot = 0; slot < backingStacks.size(); slot++) {
+    private int firstCanonicalEmptySlot(int minimumSlot) {
+        for (int slot = minimumSlot; slot < backingStacks.size(); slot++) {
             if (backingStacks.get(slot) == ItemStack.EMPTY) return slot;
         }
         return -1;

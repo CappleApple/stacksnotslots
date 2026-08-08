@@ -61,7 +61,7 @@ Linux/macOS:
 ./gradlew runServer
 ```
 
-The built mod is written to `build/libs/stacksnotslots-0.2.1.jar`. The project uses official Mojang mappings with Parchment parameter names and ModDevGradle's Minecraft-aware JUnit support.
+The built mod is written to `build/libs/stacksnotslots-0.3.0.jar`. The project uses official Mojang mappings with Parchment parameter names and ModDevGradle's Minecraft-aware JUnit support.
 
 ## Player usage
 
@@ -70,10 +70,10 @@ Open the normal inventory to see the familiar vanilla layout. Use the slim `>` t
 - Left-click an entry to move a legal stack to the cursor.
 - Right-click an entry to move half a legal stack to the cursor.
 - Press the normal drop key while hovering an entry to drop one; hold Control to drop a stack.
-- Shift-click an entry to bind its exact item to the currently selected hotbar position.
-- Use **Manage Tabs** to add/edit/delete/reorder categories. The **B** button binds a category to the selected hotbar position.
-- Selecting a category or sort mode projects only that ordered view into the vanilla main-inventory grid; ordinary insertion/removal does not compact explicitly placed slots.
-- Use the configurable forward/backward cycle keys to change the active item in a category-bound hotbar position.
+- Control-left-click a visible player slot to stow that stack behind the vanilla window. Clicking the browser list while carrying a stack does the same.
+- Use **Manage Tabs** to add/edit/delete/reorder categories, assign a cycle category independently to each of the nine hotbar positions, and choose whether pickups may enter empty hotbar slots.
+- Selecting a category or sort mode performs one explicit arrangement of the main 27-slot grid. It displays one stack per distinct matching identity; subsequent placement is fully manual until another category or sort control is clicked.
+- Hotbar bindings never restrict placement or rearrange items automatically. The configurable forward/backward cycle keys explicitly swap the selected position with the next owned item in its assigned category.
 - Container screens show a scrollable unified-inventory panel; take any logical entry to the cursor and place it into the container normally.
 
 Search matches display names, full registry IDs, namespaces, item tags (prefix the query with `#`), and optionally cached tooltip text. Sort modes cover name, quantity, registry ID, and namespace; the current sort and category selection persist with player data.
