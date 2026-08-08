@@ -34,7 +34,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.entity.player.Inventory;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.lwjgl.glfw.GLFW;
@@ -89,36 +88,30 @@ public final class ContainerInventoryOverlay {
     /**
      * Routes input before any concrete container screen sees it. Modded screens are not required to
      * dispatch through {@link net.minecraft.client.gui.components.events.ContainerEventHandler}, so
-     * registering this overlay as a child widget is not universal. Only exact overlay bounds (or the
-     * explicit control-click stow gesture) are cancelled here.
+     * registering this overlay as a child widget is not universal. Only exact visible overlay bounds
+     * are consumed here; hiding the browser removes all of its mouse participation.
      */
-    public static void click(ScreenEvent.MouseButtonPressed.Pre event) {
-        if (!supports(event.getScreen()) || Minecraft.getInstance().player == null) return;
+    public static boolean mouseButton(int button, int action) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (!supports(minecraft.screen) || minecraft.player == null) return false;
+        Screen screen = minecraft.screen;
+        double mouseX = scaledMouseX(minecraft);
+        double mouseY = scaledMouseY(minecraft);
+        if (action == GLFW.GLFW_RELEASE) return releasePointer(screen, mouseX, mouseY, button);
+        if (action != GLFW.GLFW_PRESS) return false;
+
         // A screen transition or another mod can suppress the matching release callback. Never let
         // stale overlay capture leak into a subsequent native click.
         if (consumedReleaseButton != -1) clearPointerCapture();
-        AbstractContainerScreen<?> screen = (AbstractContainerScreen<?>)event.getScreen();
-        if (mouseClicked(screen, event.getMouseX(), event.getMouseY(), event.getButton())) {
-            event.setCanceled(true);
-            return;
-        }
-
-        var slot = screen.getSlotUnderMouse();
-        if (event.getButton() == 0 && Screen.hasControlDown() && slot != null && slot.container instanceof Inventory
-                && slot.getContainerSlot() >= 0 && slot.getContainerSlot() < Inventory.INVENTORY_SIZE
-                && !slot.getItem().isEmpty()) {
-            capturePointer(event.getScreen(), event.getButton());
-            PacketDistributor.sendToServer(new StowSlotPayload(slot.getContainerSlot()));
-            event.setCanceled(true);
-        }
+        return mouseClicked((AbstractContainerScreen<?>)screen, mouseX, mouseY, button);
     }
 
-    /** Cancels scrolling only when a browser control actually handled it. */
-    public static void scroll(ScreenEvent.MouseScrolled.Pre event) {
-        if (!supports(event.getScreen())) return;
-        if (mouseScrolled((AbstractContainerScreen<?>)event.getScreen(), event.getMouseX(), event.getMouseY(), event.getScrollDeltaY())) {
-            event.setCanceled(true);
-        }
+    /** Handles browser scrolling before ingredient overlays can claim the same topmost pixels. */
+    public static boolean mouseScrolled(double deltaY) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (!supports(minecraft.screen)) return false;
+        return mouseScrolled((AbstractContainerScreen<?>)minecraft.screen,
+                scaledMouseX(minecraft), scaledMouseY(minecraft), deltaY);
     }
 
     public static void render(ScreenEvent.Render.Post event) {
@@ -129,6 +122,7 @@ public final class ContainerInventoryOverlay {
         hoveredEntry = null;
         hoveredCategory = null;
         hoveredControl = null;
+        updateDrag(event.getScreen(), event.getMouseX(), event.getMouseY());
         // Some custom container screens leave depth-tested GUI geometry at the default layer. Keep
         // rendering and hit testing consistent by drawing every owned browser pixel above it.
         graphics.pose().pushPose();
@@ -144,30 +138,18 @@ public final class ContainerInventoryOverlay {
         }
     }
 
-    /** Scoped pre-event support for an overlay press; unrelated modded-screen input is never cancelled. */
-    public static void drag(ScreenEvent.MouseDragged.Pre event) {
-        if (!dragging || event.getMouseButton() != 0 || !supports(event.getScreen())) return;
-        Screen screen = event.getScreen();
-        handleX = clamp((int)Math.round(event.getMouseX() - dragOffsetX), 0, screen.width - HANDLE_WIDTH);
-        handleY = clamp((int)Math.round(event.getMouseY() - dragOffsetY), 0, screen.height - HANDLE_HEIGHT);
-        chooseAutomaticSide(screen);
-        event.setCanceled(true);
-    }
-
-    /** Cancels only the release paired with a browser-owned press, avoiding click-through. */
-    public static void release(ScreenEvent.MouseButtonReleased.Pre event) {
-        if (event.getButton() != consumedReleaseButton) return;
+    private static boolean releasePointer(Screen screen, double mouseX, double mouseY, int button) {
+        if (button != consumedReleaseButton) return false;
         Screen pressScreen = capturedPressScreen;
         boolean wasDragging = dragging;
         clearPointerCapture();
-        if (pressScreen != event.getScreen()) return;
-        if (wasDragging && event.getButton() == 0) {
-            if (Math.hypot(event.getMouseX() - pressX, event.getMouseY() - pressY) < 3.0) setOpen(!open, event.getScreen());
+        if (pressScreen != screen) return false;
+        if (wasDragging && button == 0) {
+            if (Math.hypot(mouseX - pressX, mouseY - pressY) < 3.0) setOpen(!open, screen);
             ClientConfig.BROWSER_HANDLE_X.set(handleX);
             ClientConfig.BROWSER_HANDLE_Y.set(handleY);
-            refreshIngredientLayout(event.getScreen());
         }
-        event.setCanceled(true);
+        return true;
     }
 
     public static void keyPressed(ScreenEvent.KeyPressed.Pre event) {
@@ -178,8 +160,8 @@ public final class ContainerInventoryOverlay {
                 ClientConfig.BROWSER_HANDLE_VISIBLE.set(false);
             } else {
                 ClientConfig.BROWSER_HANDLE_VISIBLE.set(!ClientConfig.BROWSER_HANDLE_VISIBLE.getAsBoolean());
-                refreshIngredientLayout(event.getScreen());
             }
+            clearPointerCapture();
             searchFocused = false;
             event.setCanceled(true);
             return;
@@ -580,7 +562,6 @@ public final class ContainerInventoryOverlay {
         ClientConfig.BrowserDockSide current = ClientConfig.BROWSER_DOCK_SIDE.get();
         ClientConfig.BrowserDockSide[] sides = ClientConfig.BrowserDockSide.values();
         ClientConfig.BROWSER_DOCK_SIDE.set(sides[(current.ordinal() + 1) % sides.length]);
-        refreshIngredientLayout(screen);
     }
 
     private static void chooseAutomaticSide(Screen screen) {
@@ -601,16 +582,6 @@ public final class ContainerInventoryOverlay {
     private static void setOpen(boolean value, Screen screen) {
         open = value;
         PacketDistributor.sendToServer(new BrowserStatePayload(value));
-        refreshIngredientLayout(screen);
-    }
-
-    /** Reinitialization makes JEI/EMI recompute exclusion geometry immediately after a layout change. */
-    private static void refreshIngredientLayout(Screen screen) {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (screen == null || minecraft.screen != screen) return;
-        minecraft.execute(() -> {
-            if (minecraft.screen == screen) screen.resize(minecraft, screen.width, screen.height);
-        });
     }
 
     private static void invalidateEntries() { cachedRevision = -1; }
@@ -624,6 +595,23 @@ public final class ContainerInventoryOverlay {
         capturedPressScreen = null;
         consumedReleaseButton = -1;
         dragging = false;
+    }
+
+    private static void updateDrag(Screen screen, double mouseX, double mouseY) {
+        if (!dragging || capturedPressScreen != screen) return;
+        handleX = clamp((int)Math.round(mouseX - dragOffsetX), 0, screen.width - HANDLE_WIDTH);
+        handleY = clamp((int)Math.round(mouseY - dragOffsetY), 0, screen.height - HANDLE_HEIGHT);
+        chooseAutomaticSide(screen);
+    }
+
+    private static double scaledMouseX(Minecraft minecraft) {
+        return minecraft.mouseHandler.xpos() * minecraft.getWindow().getGuiScaledWidth()
+                / minecraft.getWindow().getScreenWidth();
+    }
+
+    private static double scaledMouseY(Minecraft minecraft) {
+        return minecraft.mouseHandler.ypos() * minecraft.getWindow().getGuiScaledHeight()
+                / minecraft.getWindow().getScreenHeight();
     }
 
     private static ItemStack configuredIcon(String id) {

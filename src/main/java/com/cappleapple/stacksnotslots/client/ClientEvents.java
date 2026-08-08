@@ -116,26 +116,6 @@ public final class ClientEvents {
     }
 
     @SubscribeEvent(priority = EventPriority.HIGHEST)
-    public static void clickContainerOverlay(ScreenEvent.MouseButtonPressed.Pre event) {
-        ContainerInventoryOverlay.click(event);
-    }
-
-    @SubscribeEvent(priority = EventPriority.HIGHEST)
-    public static void scrollContainerOverlay(ScreenEvent.MouseScrolled.Pre event) {
-        ContainerInventoryOverlay.scroll(event);
-    }
-
-    @SubscribeEvent(priority = EventPriority.HIGHEST)
-    public static void dragContainerOverlay(ScreenEvent.MouseDragged.Pre event) {
-        ContainerInventoryOverlay.drag(event);
-    }
-
-    @SubscribeEvent(priority = EventPriority.HIGHEST)
-    public static void releaseContainerOverlay(ScreenEvent.MouseButtonReleased.Pre event) {
-        ContainerInventoryOverlay.release(event);
-    }
-
-    @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void keyContainerOverlay(ScreenEvent.KeyPressed.Pre event) {
         ContainerInventoryOverlay.keyPressed(event);
     }

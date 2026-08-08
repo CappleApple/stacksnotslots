@@ -13,7 +13,8 @@
     "SlotMixin"
   ],
   "client": [
-    "GuiMixin"
+    "GuiMixin",
+    "MouseHandlerMixin"
   ],
   "injectors": {
     "defaultRequire": 1
