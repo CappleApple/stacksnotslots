@@ -158,8 +158,10 @@ public final class ModNetwork {
     private static void receiveDelta(InventoryDeltaPayload payload, IPayloadContext context) {
         Map<Integer, ItemStack> changes = new LinkedHashMap<>();
         for (InventoryDeltaPayload.SlotChange change : payload.changes()) changes.put(change.index(), change.stack());
-        boolean applied = context.player().getData(ModAttachments.PLAYER_DATA).inventory()
-                .applyNetworkDelta(payload.baseRevision(), payload.revision(), payload.resultingSize(), changes);
+        PlayerInventoryData data = context.player().getData(ModAttachments.PLAYER_DATA);
+        boolean applied = data.inventory().applyNetworkDelta(
+                payload.baseRevision(), payload.revision(), payload.resultingSize(), changes);
+        if (applied) data.syncVanillaCompatibilityView();
         if (!applied) PacketDistributor.sendToServer(new RequestFullSyncPayload());
     }
 

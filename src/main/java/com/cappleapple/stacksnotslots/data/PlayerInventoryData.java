@@ -3,6 +3,7 @@ package com.cappleapple.stacksnotslots.data;
 import com.cappleapple.stacksnotslots.attribute.ModAttributes;
 import com.cappleapple.stacksnotslots.category.PlayerCategoryData;
 import com.cappleapple.stacksnotslots.category.SortMode;
+import com.cappleapple.stacksnotslots.compat.VanillaInventoryMirror;
 import com.cappleapple.stacksnotslots.hotbar.HotbarBindings;
 import com.cappleapple.stacksnotslots.inventory.DynamicCapacityInventory;
 import net.minecraft.core.HolderLookup;
@@ -32,7 +33,10 @@ public final class PlayerInventoryData implements INBTSerializable<CompoundTag> 
     public PlayerCategoryData categories() { return categories; }
     public HotbarBindings hotbar() { return hotbar; }
     public boolean migratedVanillaInventory() { return migratedVanillaInventory; }
-    public void setMigratedVanillaInventory() { migratedVanillaInventory = true; }
+    public void setMigratedVanillaInventory() {
+        migratedVanillaInventory = true;
+        syncVanillaCompatibilityView();
+    }
     public boolean initializedCapacityBase() { return initializedCapacityBase; }
     public void setInitializedCapacityBase() { initializedCapacityBase = true; }
     public SortMode inventorySortPreference() { return inventorySortPreference; }
@@ -65,7 +69,20 @@ public final class PlayerInventoryData implements INBTSerializable<CompoundTag> 
     }
 
     private void onInventoryChanged() {
+        syncVanillaCompatibilityView();
         if (owner != null && !owner.level().isClientSide) ModAttachments.markDirty(owner);
+    }
+
+    /** Refreshes the public vanilla list used directly by some third-party inventory mods. */
+    public void syncVanillaCompatibilityView() {
+        if (owner == null || !migratedVanillaInventory) return;
+        VanillaInventoryMirror.publish(inventory, owner.getInventory().items);
+    }
+
+    /** Imports API writes made directly through Inventory#items, then restores its live view. */
+    public void reconcileVanillaCompatibilityView() {
+        if (owner == null || !migratedVanillaInventory) return;
+        VanillaInventoryMirror.reconcileDirectWrites(inventory, owner.getInventory().items);
     }
 
     @Override
@@ -90,6 +107,7 @@ public final class PlayerInventoryData implements INBTSerializable<CompoundTag> 
         migratedVanillaInventory = root.getBoolean("MigratedVanillaInventory");
         initializedCapacityBase = root.getBoolean("InitializedCapacityBase");
         loadUiPreferences(root);
+        syncVanillaCompatibilityView();
     }
 
     private void loadUiPreferences(CompoundTag root) {

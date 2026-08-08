@@ -108,7 +108,9 @@ public abstract class InventoryMixin {
 
     @Inject(method = "setChanged", at = @At("TAIL"))
     private void sns$reconcileChangedSlot(CallbackInfo callback) {
-        if (sns$active()) sns$data().inventory().reconcileExternalMutations();
+        if (!sns$active()) return;
+        sns$data().reconcileVanillaCompatibilityView();
+        sns$data().inventory().reconcileExternalMutations();
     }
 
     @Inject(method = "getFreeSlot", at = @At("HEAD"), cancellable = true)
@@ -170,9 +172,12 @@ public abstract class InventoryMixin {
         if (sns$active() && sns$data().inventory().backingStacks().stream().anyMatch(predicate)) callback.setReturnValue(true);
     }
 
-    @Inject(method = "tick", at = @At("HEAD"))
+    @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
     private void sns$tick(CallbackInfo callback) {
-        if (sns$active()) sns$data().inventory().tick(player);
+        if (!sns$active()) return;
+        sns$data().reconcileVanillaCompatibilityView();
+        sns$data().inventory().tick(player);
+        callback.cancel();
     }
 
     @Inject(method = "dropAll", at = @At("HEAD"))

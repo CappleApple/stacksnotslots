@@ -63,7 +63,7 @@ Linux/macOS:
 ./gradlew runServer
 ```
 
-The built mod is written to `build/libs/stacksnotslots-0.5.1.jar`. The project uses official Mojang mappings with Parchment parameter names and ModDevGradle's Minecraft-aware JUnit support.
+The built mod is written to `build/libs/stacksnotslots-0.5.2.jar`. The project uses official Mojang mappings with Parchment parameter names and ModDevGradle's Minecraft-aware JUnit support.
 
 ## Player usage
 
@@ -179,10 +179,10 @@ The public entry point is `com.cappleapple.stacksnotslots.api.StacksNotSlotsApi`
 - Empty compatibility positions are retained as sparse holes, so explicit vanilla/API slot placement remains stable across inventory changes and persistence.
 - Vanilla menus retain 36 projected item indices and real armor/offhand indices. The custom inventory/container panels provide access to entries outside that projection.
 - Shift-clicks from external containers use vanilla visible-slot behavior while the browser is closed and the dynamic backend path while it is open. Player-owned main-grid/hotbar shift-clicks retain vanilla destination semantics whenever the browser is closed.
-- Direct mutation of live vanilla projected stacks is reconciled each player tick and synchronized by revision.
-- The HUD hotbar reads the live projection instead of vanilla's stale public `items` list.
+- The public vanilla `Inventory.items` list is maintained as a live first-36 compatibility view for mods that access the field directly; direct replacements and stack mutations are reconciled into logical storage.
+- The HUD hotbar and accessor APIs read the same live projection.
 - JEI and EMI receive the expanded browser as an exclusion area and can lay out their ingredient panels around it.
-- Recipe matching accounts for all logical stacks. Some modded recipe-placement or inventory code that directly indexes `Inventory.items` may only observe vanilla's empty compatibility field.
+- Recipe matching accounts for all logical stacks. Code that directly indexes `Inventory.items` observes the live first-36 view, while capability/API integrations can enumerate the complete dynamic backend.
 - Client UI classes are isolated behind the client-only mod entry point; the dedicated server smoke run loads no client package.
 
 ## Roadmap
