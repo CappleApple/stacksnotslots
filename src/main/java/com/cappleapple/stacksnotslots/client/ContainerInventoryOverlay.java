@@ -57,6 +57,7 @@ public final class ContainerInventoryOverlay {
     private static boolean searchFocused;
     private static boolean dragging;
     private static int consumedReleaseButton = -1;
+    private static Screen capturedPressScreen;
     private static double dragOffsetX;
     private static double dragOffsetY;
     private static double pressX;
@@ -93,6 +94,9 @@ public final class ContainerInventoryOverlay {
      */
     public static void click(ScreenEvent.MouseButtonPressed.Pre event) {
         if (!supports(event.getScreen()) || Minecraft.getInstance().player == null) return;
+        // A screen transition or another mod can suppress the matching release callback. Never let
+        // stale overlay capture leak into a subsequent native click.
+        if (consumedReleaseButton != -1) clearPointerCapture();
         AbstractContainerScreen<?> screen = (AbstractContainerScreen<?>)event.getScreen();
         if (mouseClicked(screen, event.getMouseX(), event.getMouseY(), event.getButton())) {
             event.setCanceled(true);
@@ -103,7 +107,7 @@ public final class ContainerInventoryOverlay {
         if (event.getButton() == 0 && Screen.hasControlDown() && slot != null && slot.container instanceof Inventory
                 && slot.getContainerSlot() >= 0 && slot.getContainerSlot() < Inventory.INVENTORY_SIZE
                 && !slot.getItem().isEmpty()) {
-            consumedReleaseButton = event.getButton();
+            capturePointer(event.getScreen(), event.getButton());
             PacketDistributor.sendToServer(new StowSlotPayload(slot.getContainerSlot()));
             event.setCanceled(true);
         }
@@ -125,11 +129,19 @@ public final class ContainerInventoryOverlay {
         hoveredEntry = null;
         hoveredCategory = null;
         hoveredControl = null;
-        if (open) renderPanel((AbstractContainerScreen<?>)event.getScreen(), graphics, event.getMouseX(), event.getMouseY());
-        renderHandle(graphics, event.getMouseX(), event.getMouseY());
-        if (hoveredEntry != null) graphics.renderTooltip(Minecraft.getInstance().font, hoveredEntry.representative(), event.getMouseX(), event.getMouseY());
-        else if (hoveredCategory != null) graphics.renderTooltip(Minecraft.getInstance().font, Component.literal(hoveredCategory.displayName()), event.getMouseX(), event.getMouseY());
-        else if (hoveredControl != null) graphics.renderTooltip(Minecraft.getInstance().font, Component.translatable(hoveredControl), event.getMouseX(), event.getMouseY());
+        // Some custom container screens leave depth-tested GUI geometry at the default layer. Keep
+        // rendering and hit testing consistent by drawing every owned browser pixel above it.
+        graphics.pose().pushPose();
+        graphics.pose().translate(0, 0, 300);
+        try {
+            if (open) renderPanel((AbstractContainerScreen<?>)event.getScreen(), graphics, event.getMouseX(), event.getMouseY());
+            renderHandle(graphics, event.getMouseX(), event.getMouseY());
+            if (hoveredEntry != null) graphics.renderTooltip(Minecraft.getInstance().font, hoveredEntry.representative(), event.getMouseX(), event.getMouseY());
+            else if (hoveredCategory != null) graphics.renderTooltip(Minecraft.getInstance().font, Component.literal(hoveredCategory.displayName()), event.getMouseX(), event.getMouseY());
+            else if (hoveredControl != null) graphics.renderTooltip(Minecraft.getInstance().font, Component.translatable(hoveredControl), event.getMouseX(), event.getMouseY());
+        } finally {
+            graphics.pose().popPose();
+        }
     }
 
     /** Scoped pre-event support for an overlay press; unrelated modded-screen input is never cancelled. */
@@ -145,9 +157,11 @@ public final class ContainerInventoryOverlay {
     /** Cancels only the release paired with a browser-owned press, avoiding click-through. */
     public static void release(ScreenEvent.MouseButtonReleased.Pre event) {
         if (event.getButton() != consumedReleaseButton) return;
-        consumedReleaseButton = -1;
-        if (dragging && event.getButton() == 0) {
-            dragging = false;
+        Screen pressScreen = capturedPressScreen;
+        boolean wasDragging = dragging;
+        clearPointerCapture();
+        if (pressScreen != event.getScreen()) return;
+        if (wasDragging && event.getButton() == 0) {
             if (Math.hypot(event.getMouseX() - pressX, event.getMouseY() - pressY) < 3.0) setOpen(!open, event.getScreen());
             ClientConfig.BROWSER_HANDLE_X.set(handleX);
             ClientConfig.BROWSER_HANDLE_Y.set(handleY);
@@ -252,7 +266,7 @@ public final class ContainerInventoryOverlay {
         ensurePosition(screen);
         boolean handleVisible = ClientConfig.BROWSER_HANDLE_VISIBLE.getAsBoolean();
         if (handleVisible && inside(mouseX, mouseY, handleX, handleY, HANDLE_WIDTH, HANDLE_HEIGHT)) {
-            consumedReleaseButton = button;
+            capturePointer(screen, button);
             if (button == 0) {
                 dragging = true;
                 dragOffsetX = mouseX - handleX;
@@ -269,7 +283,7 @@ public final class ContainerInventoryOverlay {
             return false;
         }
 
-        consumedReleaseButton = button;
+        capturePointer(screen, button);
         if (inside(mouseX, mouseY, layout.searchX, layout.searchY, layout.searchWidth, CONTROL_HEIGHT)) {
             searchFocused = true;
             return true;
@@ -600,6 +614,17 @@ public final class ContainerInventoryOverlay {
     }
 
     private static void invalidateEntries() { cachedRevision = -1; }
+
+    private static void capturePointer(Screen screen, int button) {
+        capturedPressScreen = screen;
+        consumedReleaseButton = button;
+    }
+
+    private static void clearPointerCapture() {
+        capturedPressScreen = null;
+        consumedReleaseButton = -1;
+        dragging = false;
+    }
 
     private static ItemStack configuredIcon(String id) {
         ResourceLocation location = ResourceLocation.tryParse(id);
