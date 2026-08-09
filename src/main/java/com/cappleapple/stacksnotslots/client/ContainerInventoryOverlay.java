@@ -298,6 +298,12 @@ public final class ContainerInventoryOverlay {
             return true;
         }
 
+        if (inside(mouseX, mouseY, layout.contentX, layout.contentY, layout.contentWidth, layout.contentHeight)
+                && (button == 0 || button == 1)
+                && !Minecraft.getInstance().player.containerMenu.getCarried().isEmpty()) {
+            PacketDistributor.sendToServer(new StowSlotPayload(-1));
+            return true;
+        }
         LogicalInventoryEntry entry = entryAt(screen, mouseX, mouseY);
         if (entry != null && (button == 0 || button == 1)) {
             ItemStack carried = Minecraft.getInstance().player.containerMenu.getCarried();
@@ -477,9 +483,10 @@ public final class ContainerInventoryOverlay {
         cachedCategory = categoryId;
         cachedSort = sortMode;
         CategoryDefinition category = currentCategory();
+        boolean searching = !query.trim().isEmpty();
         ArrayList<LogicalInventoryEntry> values = new ArrayList<>();
         for (LogicalInventoryEntry entry : data.inventory().entriesAtOrAfter(36)) {
-            if (category != null && !CategoryMatcher.matches(category, entry.representative())) continue;
+            if (!searching && category != null && !CategoryMatcher.matches(category, entry.representative())) continue;
             if (matchesSearch(entry.representative(), query)) values.add(entry);
         }
         values.sort(comparator(sortMode));

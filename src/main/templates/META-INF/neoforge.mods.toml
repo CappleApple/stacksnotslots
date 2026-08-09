@@ -42,12 +42,11 @@ displayName="${mod_name}" #mandatory
 #credits="" #optional
 
 # The authors of the mod, displayed in the mod UI (optional)
-authors="cappleapple"
+authors="CappleApple"
 
 # The description text for the mod (multi line!) (#mandatory)
 description='''
-A server-authoritative, capacity-based player inventory with dynamic logical entries,
-query-driven categories, and a virtual hotbar.
+Makes the player's inventory based on capacity rather than geometry.
 '''
 
 # The [[mixins]] block allows you to declare your mixin config to FML so that it gets loaded.

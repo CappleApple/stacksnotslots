@@ -63,7 +63,7 @@ Linux/macOS:
 ./gradlew runServer
 ```
 
-The built mod is written to `build/libs/stacksnotslots-0.5.5.jar`. The project uses official Mojang mappings with Parchment parameter names and ModDevGradle's Minecraft-aware JUnit support.
+The built mod is written to `build/libs/stacksnotslots-0.6.0.jar`. The project uses official Mojang mappings with Parchment parameter names and ModDevGradle's Minecraft-aware JUnit support.
 
 ## Player usage
 
@@ -76,13 +76,13 @@ Open the normal inventory to see the familiar vanilla layout. Click the spyglass
 - With the browser closed, shift-clicking retains normal vanilla main-grid/hotbar/equipment behavior. With it open, shift-clicking a visible player stack stows it; shift-clicking a browser entry moves one backend stack into the first free main-grid slot, or does nothing when that grid is full.
 - In another container screen, an open browser redirects container-to-player shift-clicks into backend storage while player-to-container shift-clicks keep the menu's native behavior.
 - The sticky-piston browser button extracts an open container; hold Shift to turn it into a normal piston and dump the player inventory. Control-G and Control-H perform bulk dump/extract against the open menu or the container being looked at.
-- The draggable category icon above the vanilla grid scrolls categories without opening its popup. Hold Shift to turn it into a sticky piston and stow the 27-slot main grid without touching the hotbar.
+- The draggable category icon above the vanilla grid scrolls categories whether its popup is open or closed. Hold Shift to turn it into a sticky piston and stow the 27-slot main grid without touching the hotbar.
 - Use **Manage Tabs** to add/edit/delete/reorder categories, assign a cycle category independently to each of the nine hotbar positions, and choose whether pickups may enter empty hotbar slots.
 - Selecting a category or sort mode performs one explicit arrangement of the main 27-slot grid. It displays one stack per distinct matching identity; subsequent placement is fully manual until another category or sort control is clicked.
 - Hotbar bindings never restrict placement or rearrange items automatically. The configurable forward/backward cycle keys explicitly swap the selected position with the next owned item in its assigned category.
 - Every container screen can show the same draggable browser; take any logical entry to the cursor and place it into the container normally.
 
-Search matches display names, full registry IDs, mod namespaces (prefix with `@`), item tags (prefix with `#`), and optionally cached tooltip text. Category rules accept exact items, `#tags`, and `@modid` namespaces. Sort modes cover name, quantity, registry ID, and namespace; the current sort and category selection persist with player data.
+An empty search shows the selected category. A non-empty search spans every category and matches display names, full registry IDs, mod namespaces (prefix with `@`), item tags (prefix with `#`), and optionally cached tooltip text. Search results retain the selected sort order. Category rules accept exact items, `#tags`, and `@modid` namespaces. Sort modes cover name, quantity, registry ID, and namespace; the current sort and category selection persist with player data.
 
 ## Capacity and over-capacity behavior
 
