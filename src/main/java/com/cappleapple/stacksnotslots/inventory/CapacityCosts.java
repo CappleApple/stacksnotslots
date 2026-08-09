@@ -5,10 +5,12 @@ import java.util.Comparator;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 
 public final class CapacityCosts {
     public static final long STACK_EQUIVALENT_UNITS = 64L;
+    public static final int DEFAULT_INVENTORY_CAPACITY_UNITS = Inventory.INVENTORY_SIZE * (int) STACK_EQUIVALENT_UNITS;
     private static final CopyOnWriteArrayList<Registration> PROVIDERS = new CopyOnWriteArrayList<>();
 
     private CapacityCosts() {}

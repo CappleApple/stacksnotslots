@@ -17,6 +17,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.Bootstrap;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.BeforeAll;
@@ -27,6 +28,14 @@ class DynamicCapacityInventoryTest {
     static void bootstrapMinecraft() {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
+    }
+
+    @Test
+    void defaultCapacityIncludesMainGridAndHotbar() {
+        assertEquals(36, Inventory.INVENTORY_SIZE);
+        assertEquals(2_304, CapacityCosts.DEFAULT_INVENTORY_CAPACITY_UNITS);
+        assertEquals(Inventory.INVENTORY_SIZE * CapacityCosts.STACK_EQUIVALENT_UNITS,
+                CapacityCosts.DEFAULT_INVENTORY_CAPACITY_UNITS);
     }
 
     @Test

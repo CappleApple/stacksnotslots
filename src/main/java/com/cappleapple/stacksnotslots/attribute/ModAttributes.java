@@ -1,6 +1,7 @@
 package com.cappleapple.stacksnotslots.attribute;
 
 import com.cappleapple.stacksnotslots.StacksNotSlots;
+import com.cappleapple.stacksnotslots.inventory.CapacityCosts;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.RangedAttribute;
@@ -10,7 +11,7 @@ import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 public final class ModAttributes {
-    public static final double DEFAULT_CAPACITY = 1728.0;
+    public static final double DEFAULT_CAPACITY = CapacityCosts.DEFAULT_INVENTORY_CAPACITY_UNITS;
     public static final DeferredRegister<Attribute> ATTRIBUTES = DeferredRegister.create(Registries.ATTRIBUTE, StacksNotSlots.MOD_ID);
     public static final DeferredHolder<Attribute, Attribute> INVENTORY_CAPACITY = ATTRIBUTES.register(
             "inventory_capacity",

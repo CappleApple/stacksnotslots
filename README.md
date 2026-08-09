@@ -2,7 +2,7 @@
 
 Stacks Not Slots is a NeoForge mod for Minecraft 1.21.1 that makes player storage capacity-based instead of slot-count-based. The authoritative inventory is a dynamically growing collection of legal `ItemStack` values. The nine-position hotbar and vanilla inventory indices are access views over that collection; neither grants storage nor limits how many distinct entries can exist.
 
-The default capacity is 1,728 units. A 64-stackable item costs one unit, a 16-stackable item costs four, and a non-stackable item costs 64. Capacity includes hotbar-accessed items and is controlled live by the `stacksnotslots:inventory_capacity` player attribute.
+The default capacity is 2,304 units: 36 stack-equivalents covering the vanilla 27-slot main grid plus 9-slot hotbar. A 64-stackable item costs one unit, a 16-stackable item costs four, and a non-stackable item costs 64. Capacity includes hotbar-accessed items and is controlled live by the `stacksnotslots:inventory_capacity` player attribute.
 
 There is no hidden compatibility-slot ceiling below capacity. If a player has capacity `N`, the backend and NeoForge item-handler view can grow to represent `N` distinct quantity-one 64-stackable identities (subject only to Java's practical integer/memory limits). Snapshot chunking and the vanilla 36-index projection are transport/access details, never carrying limits.
 
@@ -117,7 +117,7 @@ Player customizations are persisted by UUID in the client-owned `SNS-SaveState.j
 
 `config/stacksnotslots-common.toml`:
 
-- `inventory.baseInventoryCapacity` - initial base attribute value, default `1728`
+- `inventory.baseInventoryCapacity` - initial base attribute value, default `2304` (36 stack-equivalents: main grid plus hotbar)
 - `inventory.overCapacityBlocksPickup` - enables the dedicated over-capacity pickup short-circuit; disabling it never permits positive growth beyond global capacity
 - `inventory.allowPartialPickup` - accept only the legal portion of a ground stack
 - `categories.categoryLimitsAffectWorldPickup` - default `true`
