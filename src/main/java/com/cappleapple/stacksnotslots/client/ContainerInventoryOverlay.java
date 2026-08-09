@@ -720,10 +720,14 @@ public final class ContainerInventoryOverlay {
                 activeScreenType, handleX, handleY, open, visible, dockSide));
     }
 
-    /** Screen and menu type together distinguish shared vanilla screen classes with different geometry. */
+    /** Class identity and dimensions distinguish UI types without assuming every menu exposes a constructible type. */
     private static String screenStateKey(AbstractContainerScreen<?> screen) {
-        ResourceLocation menuType = BuiltInRegistries.MENU.getKey(screen.getMenu().getType());
-        return screen.getClass().getName() + '#' + menuType;
+        return screenStateKey(screen.getClass().getName(), screen.getMenu().getClass().getName(),
+                screen.getXSize(), screen.getYSize());
+    }
+
+    static String screenStateKey(String screenClass, String menuClass, int width, int height) {
+        return screenClass + '#' + menuClass + '#' + width + 'x' + height;
     }
 
     private static boolean supports(Screen screen) { return screen instanceof AbstractContainerScreen<?>; }
