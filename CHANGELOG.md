@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.3 - In development
+
+### Added
+
+- Added `/pattern` regular-expression searches to the inventory browser and category rule editor.
+- Added explicit `^text` tooltip searches and `^/pattern` tooltip regular-expression searches.
+- Added the project logo to the NeoForge Mods screen and made it the default inventory-browser handle icon.
+
+### Changed
+
+- Normal unprefixed searches no longer inspect tooltip text; tooltip indexing only runs for explicit `^` searches.
+
 ## 0.6.2 - 2026-08-09
 
 Changes since 0.6.0:

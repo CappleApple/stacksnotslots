@@ -1,5 +1,6 @@
 package com.cappleapple.stacksnotslots.client;
 
+import com.cappleapple.stacksnotslots.StacksNotSlots;
 import com.cappleapple.stacksnotslots.api.LogicalInventoryEntry;
 import com.cappleapple.stacksnotslots.category.CategoryDefinition;
 import com.cappleapple.stacksnotslots.category.CategoryMatcher;
@@ -18,10 +19,7 @@ import com.cappleapple.stacksnotslots.network.StowSlotPayload;
 import com.mojang.blaze3d.platform.InputConstants;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 import java.util.UUID;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -43,6 +41,8 @@ import org.lwjgl.glfw.GLFW;
 public final class ContainerInventoryOverlay {
     private static final int MAX_QUERY = 96;
     private static final double DRAG_THRESHOLD = 5.0;
+    private static final String BUILT_IN_LOGO_ICON = "stacksnotslots:logo";
+    private static final ResourceLocation LOGO_TEXTURE = StacksNotSlots.id("textures/gui/stacks-not-slots-logo.png");
     private static final BrowserSearchQuery SEARCH = new BrowserSearchQuery(MAX_QUERY);
     private static Screen lastScreen;
     private static Screen stateSyncedScreen;
@@ -71,7 +71,6 @@ public final class ContainerInventoryOverlay {
     private static ResourceLocation cachedCategory;
     private static SortMode cachedSort;
     private static List<LogicalInventoryEntry> cachedEntries = List.of();
-    private static final Map<SearchIdentity, String> tooltipIndex = new HashMap<>();
     private static LogicalInventoryEntry hoveredEntry;
     private static CategoryDefinition hoveredCategory;
     private static String hoveredControl;
@@ -81,6 +80,7 @@ public final class ContainerInventoryOverlay {
     /** Keeps server browser state in sync without depending on a screen's child-input implementation. */
     public static void initialize(ScreenEvent.Init.Post event) {
         if (!supports(event.getScreen())) return;
+        migrateLegacyHandleIconDefault();
         ensurePosition(event.getScreen());
         if (stateSyncedScreen != event.getScreen()) {
             stateSyncedScreen = event.getScreen();
@@ -357,16 +357,22 @@ public final class ContainerInventoryOverlay {
         String shownQuery = query.isEmpty() && !searchFocused
                 ? Component.translatable("gui.stacksnotslots.search_hint_compact").getString() : query;
         String visibleQuery = minecraft.font.plainSubstrByWidth(shownQuery, layout.searchWidth() - 7);
+        boolean validQuery = ItemSearchExpression.parse(query).valid();
         if (searchFocused && SEARCH.allSelected()) {
             int selectionWidth = minecraft.font.width(visibleQuery);
             graphics.fill(layout.searchX() + 3, layout.searchY() + 3,
                     layout.searchX() + 4 + selectionWidth, layout.searchY() + 15, 0xFF2F5F8F);
         }
         graphics.drawString(minecraft.font, visibleQuery,
-                layout.searchX() + 4, layout.searchY() + 5, query.isEmpty() ? 0x888888 : 0xFFFFFF, false);
+                layout.searchX() + 4, layout.searchY() + 5,
+                query.isEmpty() ? 0x888888 : validQuery ? 0xFFFFFF : 0xFF5555, false);
         if (searchFocused && (System.currentTimeMillis() / 500L) % 2 == 0) {
             int cursorX = layout.searchX() + 4 + minecraft.font.width(minecraft.font.plainSubstrByWidth(query, layout.searchWidth() - 7));
             graphics.fill(cursorX, layout.searchY() + 3, cursorX + 1, layout.searchY() + 15, 0xFFFFFFFF);
+        }
+        if (inside(mouseX, mouseY, layout.searchX(), layout.searchY(),
+                layout.searchWidth(), BrowserPanelLayout.CONTROL_HEIGHT)) {
+            hoveredControl = "tooltip.stacksnotslots.browser_search";
         }
 
         renderSquare(graphics, layout.category(), CategoryIcons.displayStack(currentCategory()), mouseX, mouseY,
@@ -452,7 +458,13 @@ public final class ContainerInventoryOverlay {
         graphics.fill(handleX + 2, handleY + 2, handleX + BrowserPanelLayout.HANDLE_WIDTH - 2,
                 handleY + BrowserPanelLayout.HANDLE_HEIGHT - 2,
                 open ? 0xFF356DA5 : hovered ? 0xFF777777 : 0xFF555555);
-        graphics.renderItem(configuredIcon(ClientConfig.BROWSER_HANDLE_ICON.get()), handleX + 2, handleY + 1);
+        String configuredHandleIcon = ClientConfig.BROWSER_HANDLE_ICON.get();
+        if (BUILT_IN_LOGO_ICON.equals(configuredHandleIcon)) {
+            graphics.blit(LOGO_TEXTURE, handleX + 2, handleY + 1, 16, 16,
+                    0, 0, 256, 256, 256, 256);
+        } else {
+            graphics.renderItem(configuredIcon(configuredHandleIcon), handleX + 2, handleY + 1);
+        }
         if (dragging && ClientConfig.AUTO_BROWSER_DOCK_SIDE.getAsBoolean()) {
             graphics.pose().pushPose();
             graphics.pose().translate(0, 0, 300);
@@ -517,31 +529,18 @@ public final class ContainerInventoryOverlay {
         cachedSort = sortMode;
         CategoryDefinition category = currentCategory();
         boolean searching = !query.trim().isEmpty();
+        ItemSearchExpression search = ItemSearchExpression.parse(query);
         ArrayList<LogicalInventoryEntry> values = new ArrayList<>();
         for (LogicalInventoryEntry entry : data.inventory().entriesAtOrAfter(36)) {
             if (!searching && category != null && !CategoryMatcher.matches(category, entry.representative())) continue;
-            if (matchesSearch(entry.representative(), query)) values.add(entry);
+            if (search.matches(entry.representative(), () -> ClientTooltipSearchIndex.text(entry.representative()))) {
+                values.add(entry);
+            }
         }
         values.sort(comparator(sortMode));
         cachedEntries = List.copyOf(values);
         scroll = Math.min(scroll, Math.max(0, cachedEntries.size() - 1));
         return cachedEntries;
-    }
-
-    private static boolean matchesSearch(ItemStack stack, String raw) {
-        String normalized = raw.trim().toLowerCase(Locale.ROOT);
-        if (normalized.isEmpty()) return true;
-        ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
-        if (normalized.startsWith("@")) return id.getNamespace().contains(normalized.substring(1));
-        if (normalized.startsWith("#")) return stack.getTags().anyMatch(tag -> tag.location().toString().contains(normalized.substring(1)));
-        if (stack.getHoverName().getString().toLowerCase(Locale.ROOT).contains(normalized)
-                || id.toString().contains(normalized) || id.getNamespace().contains(normalized)) return true;
-        if (!ClientConfig.TOOLTIP_INDEXING.getAsBoolean()) return false;
-        String tooltip = tooltipIndex.computeIfAbsent(new SearchIdentity(stack), ignored ->
-                stack.getTooltipLines(Item.TooltipContext.of(Minecraft.getInstance().player.level()), Minecraft.getInstance().player,
-                                net.minecraft.world.item.TooltipFlag.Default.NORMAL).stream().skip(1)
-                        .map(Component::getString).map(line -> line.toLowerCase(Locale.ROOT)).reduce("", (left, right) -> left + '\n' + right));
-        return tooltip.contains(normalized);
     }
 
     private static Comparator<LogicalInventoryEntry> comparator(SortMode mode) {
@@ -686,6 +685,15 @@ public final class ContainerInventoryOverlay {
                 .map(Item::getDefaultInstance).orElse(ItemStack.EMPTY);
     }
 
+    private static void migrateLegacyHandleIconDefault() {
+        if (ClientConfig.BROWSER_HANDLE_ICON_MIGRATED.getAsBoolean()) return;
+        if ("minecraft:spyglass".equals(ClientConfig.BROWSER_HANDLE_ICON.get())) {
+            ClientConfig.BROWSER_HANDLE_ICON.set(BUILT_IN_LOGO_ICON);
+        }
+        ClientConfig.BROWSER_HANDLE_ICON_MIGRATED.set(true);
+        ClientConfig.SPEC.save();
+    }
+
     private static String shortSortName(SortMode mode) {
         return switch (mode) {
             case NAME_ASCENDING -> "A-Z";
@@ -785,16 +793,4 @@ public final class ContainerInventoryOverlay {
     }
     private static int clamp(int value, int minimum, int maximum) { return Math.max(minimum, Math.min(maximum, value)); }
 
-    private static final class SearchIdentity {
-        private final ItemStack stack;
-        private final int hash;
-        private SearchIdentity(ItemStack stack) {
-            this.stack = stack.copyWithCount(1);
-            this.hash = ItemStack.hashItemAndComponents(stack);
-        }
-        @Override public int hashCode() { return hash; }
-        @Override public boolean equals(Object other) {
-            return other instanceof SearchIdentity identity && ItemStack.isSameItemSameComponents(stack, identity.stack);
-        }
-    }
 }

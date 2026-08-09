@@ -9,6 +9,8 @@ version="${mod_version}"
 displayName="${mod_name}"
 displayURL="https://github.com/CappleApple/stacksnotslots"
 authors="CappleApple"
+logoFile="assets/stacksnotslots/textures/gui/stacks-not-slots-logo.png"
+logoBlur=false
 description='''
 Makes the player's inventory based on capacity rather than geometry.
 '''

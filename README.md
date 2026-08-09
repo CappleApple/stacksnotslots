@@ -63,7 +63,7 @@ Linux/macOS:
 ./gradlew runServer
 ```
 
-The built mod is written to `build/libs/stacksnotslots-0.6.2.jar`. The project uses official Mojang mappings with Parchment parameter names and ModDevGradle's Minecraft-aware JUnit support.
+The built mod is written to `build/libs/stacksnotslots-0.6.3-test.1.jar`. The project uses official Mojang mappings with Parchment parameter names and ModDevGradle's Minecraft-aware JUnit support.
 
 ## Player usage
 
@@ -83,7 +83,7 @@ Open the normal inventory to see the familiar vanilla layout. Click the spyglass
 - Every container screen can show the same draggable browser; take any logical entry to the cursor and place it into the container normally.
 - Right-click the search field to clear it. Control-A selects the complete query so Backspace, Delete, or newly typed text can replace it.
 
-An empty search shows the selected category. A non-empty search spans every category and matches display names, full registry IDs, mod namespaces (prefix with `@`), item tags (prefix with `#`), and optionally cached tooltip text. Search results retain the selected sort order. Category rules accept exact items, `#tags`, and `@modid` namespaces. Sort modes cover name, quantity, registry ID, and namespace; the current sort and category selection persist with player data.
+An empty search shows the selected category. A non-empty search spans every category and matches display names and full registry IDs. Prefix with `@` for mod namespaces, `#` for item tags, `^` for cached tooltip text, or `/` for a case-insensitive regular expression across names, IDs, namespaces, and tags. Use `^/pattern` for a tooltip regular expression. A closing slash is optional, so both `/pattern` and `/pattern/` work. Invalid regular expressions are shown in red and return no results. Search results retain the selected sort order. Category rules accept exact items, `#tags`, and `@modid` namespaces; tooltip and regex searches in the category editor add the selected exact item. Sort modes cover name, quantity, registry ID, and namespace; the current sort and category selection persist with player data.
 
 The browser never extends beyond the screen edge or across its handle. It reduces visible rows or columns when space is limited, while retaining at least one item row or column. Top and bottom docking use left/right control rails so the search field remains at the top and horizontal space is available to item results.
 
@@ -133,7 +133,8 @@ Player customizations are persisted per player and are not overwritten when serv
 - `browserGridColumns` / `browserGridRows` - default `4` by `6`
 - `browserItemCountMode` - `EXACT`, `COMPACT` (default), `STACKS`, `STACKS_REMAINDER`, or `PERCENTAGE`
 - `browserOverallCountMode` - `EXACT`, `COMPACT`, `STACKS` (default), or `PERCENTAGE`
-- `manageTabsIcon`, `settingsIcon`, and `browserHandleIcon` - configurable item IDs for the square controls and draggable handle
+- `manageTabsIcon` and `settingsIcon` - configurable item IDs for the square controls
+- `browserHandleIcon` - an item ID for the draggable handle, or `stacksnotslots:logo` for the built-in logo (default)
 - `browserHandleVisible` and `browserDockSide` - defaults for container-screen types without saved state
 - `browserHandleX` and `browserHandleY` - deprecated absolute-position fields retained for config compatibility
 - `browserDefaultPlacement` - anchor used for container-screen types without saved positions; default `BOTTOM_RIGHT`, aligned beside the player hotbar

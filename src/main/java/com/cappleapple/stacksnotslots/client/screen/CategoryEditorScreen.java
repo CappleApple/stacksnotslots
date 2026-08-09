@@ -5,6 +5,8 @@ import com.cappleapple.stacksnotslots.category.CategoryDefinition;
 import com.cappleapple.stacksnotslots.category.CategoryRule;
 import com.cappleapple.stacksnotslots.category.PlayerCategoryData;
 import com.cappleapple.stacksnotslots.category.SortMode;
+import com.cappleapple.stacksnotslots.client.ClientTooltipSearchIndex;
+import com.cappleapple.stacksnotslots.client.ItemSearchExpression;
 import com.cappleapple.stacksnotslots.data.ModAttachments;
 import com.cappleapple.stacksnotslots.network.CategoryEditPayload;
 import java.util.ArrayList;
@@ -204,22 +206,28 @@ public final class CategoryEditorScreen extends Screen {
     private void updateSuggestions(String raw) {
         suggestions.clear();
         suggestionScroll = 0;
-        String query = raw.trim().toLowerCase(Locale.ROOT);
-        if (query.isBlank()) return;
-        if (query.startsWith("@")) {
+        if (raw.isBlank()) {
+            ruleSearch.setTextColor(0xE0E0E0);
+            return;
+        }
+        ItemSearchExpression search = ItemSearchExpression.parse(raw);
+        ruleSearch.setTextColor(search.valid() ? 0xE0E0E0 : 0xFF5555);
+        if (!search.valid()) return;
+        if (search.mode() == ItemSearchExpression.Mode.MOD) {
             Set<String> seen = new HashSet<>();
             for (Item item : BuiltInRegistries.ITEM) {
                 String namespace = BuiltInRegistries.ITEM.getKey(item).getNamespace();
-                if (seen.add(namespace) && namespace.contains(query.substring(1))) {
+                if (seen.add(namespace) && namespace.toLowerCase(Locale.ROOT).contains(search.term())) {
                     suggestions.add(new Suggestion("@" + namespace,
                             new CategoryRule(CategoryRule.Type.MOD_ID, ResourceLocation.fromNamespaceAndPath(namespace, "mod"))));
                 }
             }
-        } else if (query.startsWith("#")) {
+        } else if (search.mode() == ItemSearchExpression.Mode.TAG) {
             Set<ResourceLocation> seen = new HashSet<>();
             for (Item item : BuiltInRegistries.ITEM) {
                 item.getDefaultInstance().getTags().forEach(tag -> {
-                    if (seen.add(tag.location()) && tag.location().toString().contains(query.substring(1))) {
+                    if (seen.add(tag.location())
+                            && tag.location().toString().toLowerCase(Locale.ROOT).contains(search.term())) {
                         suggestions.add(new Suggestion("#" + tag.location(), new CategoryRule(CategoryRule.Type.TAG, tag.location())));
                     }
                 });
@@ -228,8 +236,7 @@ public final class CategoryEditorScreen extends Screen {
             for (Item item : BuiltInRegistries.ITEM) {
                 ResourceLocation id = BuiltInRegistries.ITEM.getKey(item);
                 ItemStack stack = item.getDefaultInstance();
-                if (!stack.isEmpty() && (id.toString().contains(query)
-                        || stack.getHoverName().getString().toLowerCase(Locale.ROOT).contains(query))) {
+                if (search.matches(stack, () -> ClientTooltipSearchIndex.text(stack))) {
                     suggestions.add(new Suggestion(stack.getHoverName().getString() + "  (" + id + ")",
                             new CategoryRule(CategoryRule.Type.ITEM, id)));
                 }
