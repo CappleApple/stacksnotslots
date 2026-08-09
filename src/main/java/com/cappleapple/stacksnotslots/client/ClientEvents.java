@@ -124,4 +124,14 @@ public final class ClientEvents {
     public static void characterContainerOverlay(ScreenEvent.CharacterTyped.Pre event) {
         ContainerInventoryOverlay.characterTyped(event);
     }
+
+    @SubscribeEvent(priority = EventPriority.LOWEST, receiveCanceled = true)
+    public static void traceCustomContainerMousePre(ScreenEvent.MouseButtonPressed.Pre event) {
+        ContainerInteractionTrace.mousePressedPre(event);
+    }
+
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public static void traceCustomContainerMousePost(ScreenEvent.MouseButtonPressed.Post event) {
+        ContainerInteractionTrace.mousePressedPost(event);
+    }
 }
