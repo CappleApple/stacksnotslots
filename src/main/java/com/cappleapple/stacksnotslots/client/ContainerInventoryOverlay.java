@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.UUID;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.Rect2i;
@@ -154,7 +155,8 @@ public final class ContainerInventoryOverlay {
 
     public static void keyPressed(ScreenEvent.KeyPressed.Pre event) {
         if (!supports(event.getScreen())) return;
-        if (ClientKeyMappings.TOGGLE_BROWSER.isActiveAndMatches(InputConstants.getKey(event.getKeyCode(), event.getScanCode()))) {
+        InputConstants.Key pressedKey = InputConstants.getKey(event.getKeyCode(), event.getScanCode());
+        if (ClientKeyMappings.TOGGLE_BROWSER.isActiveAndMatches(pressedKey)) {
             if (open) {
                 setOpen(false, event.getScreen());
                 visible = false;
@@ -165,6 +167,12 @@ public final class ContainerInventoryOverlay {
             clearPointerCapture();
             searchFocused = false;
             SEARCH.clearSelection();
+            event.setCanceled(true);
+            return;
+        }
+        if (!searchFocused && !(event.getScreen().getFocused() instanceof EditBox)
+                && ClientKeyMappings.SEARCH_BROWSER.isActiveAndMatches(pressedKey)) {
+            beginNewSearch(event.getScreen());
             event.setCanceled(true);
             return;
         }
@@ -605,6 +613,16 @@ public final class ContainerInventoryOverlay {
         persistScreenState(screen);
     }
 
+    private static void beginNewSearch(Screen screen) {
+        visible = true;
+        searchFocused = true;
+        scroll = 0;
+        updateSearch(SEARCH.clear());
+        clearPointerCapture();
+        if (!open) setOpen(true, screen);
+        else persistScreenState(screen);
+    }
+
     private static void invalidateEntries() { cachedRevision = -1; }
 
     private static void updateSearch(boolean changed) {
@@ -700,8 +718,11 @@ public final class ContainerInventoryOverlay {
             searchFocused = false;
             SEARCH.clearSelection();
             if ((handleX < 0 || handleY < 0) && screen instanceof AbstractContainerScreen<?> container) {
-                handleX = container.getGuiLeft() + container.getXSize() + 2;
-                handleY = container.getGuiTop() + container.getYSize() / 2 - BrowserPanelLayout.HANDLE_HEIGHT / 2;
+                BrowserDefaultPosition defaultPosition = BrowserDefaultPosition.resolve(
+                        container.getGuiLeft(), container.getGuiTop(), container.getXSize(), container.getYSize(),
+                        ClientConfig.BROWSER_DEFAULT_PLACEMENT.get());
+                handleX = defaultPosition.x();
+                handleY = defaultPosition.y();
             }
             constrainHandle(screen);
         }

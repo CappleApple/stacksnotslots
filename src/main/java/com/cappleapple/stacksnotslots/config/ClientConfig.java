@@ -10,6 +10,7 @@ public final class ClientConfig {
     public enum ItemCountMode { EXACT, COMPACT, STACKS, STACKS_REMAINDER, PERCENTAGE }
     public enum OverallCountMode { EXACT, COMPACT, STACKS, PERCENTAGE }
     public enum BrowserDockSide { LEFT, RIGHT, TOP, BOTTOM }
+    public enum BrowserDefaultPlacement { BOTTOM_RIGHT, RIGHT_CENTER, TOP_RIGHT, BOTTOM_LEFT, LEFT_CENTER, TOP_LEFT }
 
     public static final ModConfigSpec SPEC;
     public static final ModConfigSpec.EnumValue<CapacityDisplayMode> CAPACITY_DISPLAY_MODE;
@@ -30,6 +31,7 @@ public final class ClientConfig {
     public static final ModConfigSpec.IntValue BROWSER_HANDLE_Y;
     public static final ModConfigSpec.BooleanValue BROWSER_HANDLE_VISIBLE;
     public static final ModConfigSpec.EnumValue<BrowserDockSide> BROWSER_DOCK_SIDE;
+    public static final ModConfigSpec.EnumValue<BrowserDefaultPlacement> BROWSER_DEFAULT_PLACEMENT;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> BROWSER_SCREEN_STATES;
     public static final ModConfigSpec.BooleanValue AUTO_BROWSER_DOCK_SIDE;
     public static final ModConfigSpec.IntValue AUTO_DOCK_DEAD_ZONE_X;
@@ -60,6 +62,7 @@ public final class ClientConfig {
         BROWSER_HANDLE_Y = builder.defineInRange("browserHandleY", -1, -1, 16384);
         BROWSER_HANDLE_VISIBLE = builder.define("browserHandleVisible", true);
         BROWSER_DOCK_SIDE = builder.defineEnum("browserDockSide", BrowserDockSide.RIGHT);
+        BROWSER_DEFAULT_PLACEMENT = builder.defineEnum("browserDefaultPlacement", BrowserDefaultPlacement.BOTTOM_RIGHT);
         BROWSER_SCREEN_STATES = builder.comment("Internal per-screen browser position, visibility, open state, and dock side")
                 .defineListAllowEmpty("browserScreenStates", List.of(), null, value -> value instanceof String);
         AUTO_BROWSER_DOCK_SIDE = builder.define("autoChooseBrowserSide", true);

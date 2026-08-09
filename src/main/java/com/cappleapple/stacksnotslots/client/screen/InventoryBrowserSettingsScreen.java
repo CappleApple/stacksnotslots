@@ -14,6 +14,7 @@ public final class InventoryBrowserSettingsScreen extends Screen {
     private ClientConfig.BrowserViewMode viewMode = ClientConfig.BROWSER_VIEW_MODE.get();
     private ClientConfig.ItemCountMode itemCountMode = ClientConfig.ITEM_COUNT_MODE.get();
     private ClientConfig.OverallCountMode overallCountMode = ClientConfig.OVERALL_COUNT_MODE.get();
+    private ClientConfig.BrowserDefaultPlacement defaultPlacement = ClientConfig.BROWSER_DEFAULT_PLACEMENT.get();
     private boolean autoSide = ClientConfig.AUTO_BROWSER_DOCK_SIDE.getAsBoolean();
     private boolean transferOverlay = ClientConfig.BULK_TRANSFER_OVERLAY.getAsBoolean();
     private Button viewButton;
@@ -21,6 +22,7 @@ public final class InventoryBrowserSettingsScreen extends Screen {
     private Button overallCountButton;
     private Button autoSideButton;
     private Button transferOverlayButton;
+    private Button defaultPlacementButton;
     private EditBox columns;
     private EditBox rows;
     private EditBox deadZoneX;
@@ -71,8 +73,12 @@ public final class InventoryBrowserSettingsScreen extends Screen {
         overlaySeconds = field(left + 162, 138, 158, Double.toString(ClientConfig.BULK_TRANSFER_OVERLAY_SECONDS.get()),
                 "gui.stacksnotslots.overlay_seconds", "tooltip.stacksnotslots.overlay_seconds");
 
-        handleIcon = field(left, 160, 320, ClientConfig.BROWSER_HANDLE_ICON.get(),
+        handleIcon = field(left, 160, 158, ClientConfig.BROWSER_HANDLE_ICON.get(),
                 "gui.stacksnotslots.handle_icon", "tooltip.stacksnotslots.handle_icon");
+        defaultPlacementButton = button(left + 162, 160, 158, ignored -> {
+            defaultPlacement = next(defaultPlacement);
+            updateButtons();
+        }, "tooltip.stacksnotslots.default_browser_placement");
         manageIcon = field(left, 182, 158, ClientConfig.MANAGE_TABS_ICON.get(),
                 "gui.stacksnotslots.manage_icon", "tooltip.stacksnotslots.configurable_icon");
         settingsIcon = field(left + 162, 182, 158, ClientConfig.SETTINGS_ICON.get(),
@@ -103,6 +109,8 @@ public final class InventoryBrowserSettingsScreen extends Screen {
         itemCountButton.setMessage(Component.translatable("gui.stacksnotslots.item_count_mode", display(itemCountMode)));
         overallCountButton.setMessage(Component.translatable("gui.stacksnotslots.overall_count_mode", display(overallCountMode)));
         transferOverlayButton.setMessage(Component.translatable("gui.stacksnotslots.bulk_overlay", onOff(transferOverlay)));
+        defaultPlacementButton.setMessage(Component.translatable(
+                "gui.stacksnotslots.default_browser_placement", display(defaultPlacement)));
     }
 
     @Override
@@ -116,6 +124,9 @@ public final class InventoryBrowserSettingsScreen extends Screen {
         ClientConfig.ITEM_COUNT_MODE.set(itemCountMode);
         ClientConfig.OVERALL_COUNT_MODE.set(overallCountMode);
         ClientConfig.AUTO_BROWSER_DOCK_SIDE.set(autoSide);
+        ClientConfig.BROWSER_DEFAULT_PLACEMENT.set(defaultPlacement);
+        ClientConfig.BROWSER_HANDLE_X.set(-1);
+        ClientConfig.BROWSER_HANDLE_Y.set(-1);
         ClientConfig.BULK_TRANSFER_OVERLAY.set(transferOverlay);
         ClientConfig.BROWSER_GRID_COLUMNS.set(parseBounded(columns.getValue(), 1, 16, 4));
         ClientConfig.BROWSER_GRID_ROWS.set(parseBounded(rows.getValue(), 1, 20, 6));

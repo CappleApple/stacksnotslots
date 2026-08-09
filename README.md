@@ -63,11 +63,11 @@ Linux/macOS:
 ./gradlew runServer
 ```
 
-The built mod is written to `build/libs/stacksnotslots-0.6.0.jar`. The project uses official Mojang mappings with Parchment parameter names and ModDevGradle's Minecraft-aware JUnit support.
+The built mod is written to `build/libs/stacksnotslots-0.6.2-test.1.jar`. The project uses official Mojang mappings with Parchment parameter names and ModDevGradle's Minecraft-aware JUnit support.
 
 ## Player usage
 
-Open the normal inventory to see the familiar vanilla layout. Click the spyglass handle to open the inventory browser. Drag it at least a few pixels to reposition it; its blue state shows that the browser is open. The browser can open left, right, above, or below the handle and renders above the underlying menu. Position, docking, open state, and visibility are remembered independently for each container-screen type. Control-F toggles the handle and closes an open browser.
+Open the normal inventory to see the familiar vanilla layout. Click the spyglass handle to open the inventory browser. Drag it at least a few pixels to reposition it; its blue state shows that the browser is open. The browser can open left, right, above, or below the handle and renders above the underlying menu. Position, docking, open state, and visibility are remembered independently for each container-screen type. Control-F toggles the handle and closes an open browser. Press F to open the browser, clear its search, and begin typing a new query; while the search field is already active, F types normally.
 
 - Left-click an entry to move a legal stack to the cursor.
 - Right-click an entry to move half a legal stack to the cursor.
@@ -134,7 +134,9 @@ Player customizations are persisted per player and are not overwritten when serv
 - `browserItemCountMode` — `EXACT`, `COMPACT` (default), `STACKS`, `STACKS_REMAINDER`, or `PERCENTAGE`
 - `browserOverallCountMode` — `EXACT`, `COMPACT`, `STACKS` (default), or `PERCENTAGE`
 - `manageTabsIcon`, `settingsIcon`, and `browserHandleIcon` — configurable item IDs for the square controls and draggable handle
-- `browserHandleX`, `browserHandleY`, `browserHandleVisible`, and `browserDockSide` — defaults for container-screen types without saved state
+- `browserHandleVisible` and `browserDockSide` — defaults for container-screen types without saved state
+- `browserHandleX` and `browserHandleY` — legacy pre-0.6.1 position fallback used while migrating an existing config
+- `browserDefaultPlacement` — anchor used for container-screen types without saved positions; default `BOTTOM_RIGHT`, aligned beside the player hotbar
 - `browserScreenStates` — internal per-screen-type placement, docking, open, and visibility state
 - `autoChooseBrowserSide` — optional side selection while dragging
 - `autoSideDeadZoneX` / `autoSideDeadZoneY` — center-screen dead-zone half sizes for automatic docking

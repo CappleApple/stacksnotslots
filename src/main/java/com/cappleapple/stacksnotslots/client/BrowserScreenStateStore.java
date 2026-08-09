@@ -21,13 +21,17 @@ final class BrowserScreenStateStore {
     private BrowserScreenStateStore() {}
 
     static State load(String screenType) {
-        for (String encoded : ClientConfig.BROWSER_SCREEN_STATES.get()) {
+        List<? extends String> savedStates = ClientConfig.BROWSER_SCREEN_STATES.get();
+        for (String encoded : savedStates) {
             Optional<State> decoded = decode(encoded);
             if (decoded.isPresent() && decoded.get().screenType().equals(screenType)) return decoded.get();
         }
+        // Preserve the pre-0.6.1 global position once; subsequent unseen screens use the configured anchor.
+        int fallbackX = savedStates.isEmpty() ? ClientConfig.BROWSER_HANDLE_X.getAsInt() : -1;
+        int fallbackY = savedStates.isEmpty() ? ClientConfig.BROWSER_HANDLE_Y.getAsInt() : -1;
         return new State(screenType,
-                ClientConfig.BROWSER_HANDLE_X.getAsInt(),
-                ClientConfig.BROWSER_HANDLE_Y.getAsInt(),
+                fallbackX,
+                fallbackY,
                 false,
                 ClientConfig.BROWSER_HANDLE_VISIBLE.getAsBoolean(),
                 ClientConfig.BROWSER_DOCK_SIDE.get());
