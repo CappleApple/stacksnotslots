@@ -117,28 +117,28 @@ Player customizations are persisted per player and are not overwritten when serv
 
 `config/stacksnotslots-common.toml`:
 
-- `inventory.baseInventoryCapacity` — initial base attribute value, default `1728`
-- `inventory.overCapacityBlocksPickup` — enables the dedicated over-capacity pickup short-circuit; disabling it never permits positive growth beyond global capacity
-- `inventory.allowPartialPickup` — accept only the legal portion of a ground stack
-- `categories.categoryLimitsAffectWorldPickup` — default `true`
-- `categories.categoryLimitsAffectManualTransfers` — default `false`
+- `inventory.baseInventoryCapacity` - initial base attribute value, default `1728`
+- `inventory.overCapacityBlocksPickup` - enables the dedicated over-capacity pickup short-circuit; disabling it never permits positive growth beyond global capacity
+- `inventory.allowPartialPickup` - accept only the legal portion of a ground stack
+- `categories.categoryLimitsAffectWorldPickup` - default `true`
+- `categories.categoryLimitsAffectManualTransfers` - default `false`
 
 `config/stacksnotslots-client.toml`:
 
-- `capacityDisplayMode` — `CAPACITY`, `STACK_EQUIVALENTS`, or `BOTH`
-- `pickupLimitNotification` — `NONE`, `HUD`, `ACTION_BAR`, `SOUND`, or `HUD_AND_SOUND`
+- `capacityDisplayMode` - `CAPACITY`, `STACK_EQUIVALENTS`, or `BOTH`
+- `pickupLimitNotification` - `NONE`, `HUD`, `ACTION_BAR`, `SOUND`, or `HUD_AND_SOUND`
 - `enableSearchTooltipIndexing`
 - `enableHotbarCycleOverlay`
-- `browserViewMode` — `GRID` (default) or `LIST`
-- `browserGridColumns` / `browserGridRows` — default `4` by `6`
-- `browserItemCountMode` — `EXACT`, `COMPACT` (default), `STACKS`, `STACKS_REMAINDER`, or `PERCENTAGE`
-- `browserOverallCountMode` — `EXACT`, `COMPACT`, `STACKS` (default), or `PERCENTAGE`
-- `manageTabsIcon`, `settingsIcon`, and `browserHandleIcon` — configurable item IDs for the square controls and draggable handle
-- `browserHandleX`, `browserHandleY`, `browserHandleVisible`, and `browserDockSide` — defaults for container-screen types without saved state
-- `browserScreenStates` — internal per-screen-type placement, docking, open, and visibility state
-- `autoChooseBrowserSide` — optional side selection while dragging
-- `autoSideDeadZoneX` / `autoSideDeadZoneY` — center-screen dead-zone half sizes for automatic docking
-- `showBulkTransferOverlay` / `bulkTransferOverlaySeconds` — in-world bulk-transfer feedback and duration
+- `browserViewMode` - `GRID` (default) or `LIST`
+- `browserGridColumns` / `browserGridRows` - default `4` by `6`
+- `browserItemCountMode` - `EXACT`, `COMPACT` (default), `STACKS`, `STACKS_REMAINDER`, or `PERCENTAGE`
+- `browserOverallCountMode` - `EXACT`, `COMPACT`, `STACKS` (default), or `PERCENTAGE`
+- `manageTabsIcon`, `settingsIcon`, and `browserHandleIcon` - configurable item IDs for the square controls and draggable handle
+- `browserHandleX`, `browserHandleY`, `browserHandleVisible`, and `browserDockSide` - defaults for container-screen types without saved state
+- `browserScreenStates` - internal per-screen-type placement, docking, open, and visibility state
+- `autoChooseBrowserSide` - optional side selection while dragging
+- `autoSideDeadZoneX` / `autoSideDeadZoneY` - center-screen dead-zone half sizes for automatic docking
+- `showBulkTransferOverlay` / `bulkTransferOverlaySeconds` - in-world bulk-transfer feedback and duration
 
 ## Default preset schema
 
