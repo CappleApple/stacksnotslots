@@ -6,6 +6,12 @@
 
 - Increased the default base inventory capacity from 1,728 to 2,304 units so it represents all 36 ordinary player slots, including the nine-slot hotbar.
 
+### Fixed
+
+- Fixed shift-clicking browser entries into virtual storage terminals and menus with custom transfer logic, including Tom's Simple Storage and Sophisticated Backpacks.
+- Fixed closed-browser container transfers filling the player inventory from right to left and bottom to top instead of main-grid order.
+- Fixed custom storage menus bypassing backend stow when shift-clicking their contents while the inventory browser is open.
+
 ## 0.6.3 - 2026-08-09
 
 ### Added

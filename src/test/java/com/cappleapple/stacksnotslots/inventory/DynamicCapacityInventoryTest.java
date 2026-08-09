@@ -68,6 +68,60 @@ class DynamicCapacityInventoryTest {
     }
 
     @Test
+    void containerTransfersFillMainGridBeforeHotbarAndBackend() {
+        DynamicCapacityInventory inventory = new DynamicCapacityInventory(() -> 10_000);
+        inventory.replaceSyntheticSlotFromItemUse(9, new ItemStack(Items.DIRT));
+
+        assertTrue(inventory.insertInPlayerTransferOrder(new ItemStack(Items.STONE, 64), false).acceptedAll());
+        assertEquals(Items.DIRT, inventory.syntheticStack(9).getItem());
+        assertEquals(Items.STONE, inventory.syntheticStack(10).getItem());
+        assertTrue(inventory.syntheticStack(0).isEmpty());
+        assertTrue(inventory.validate());
+    }
+
+    @Test
+    void customQuickMoveResultsCanBeReorderedOrStowedWithoutMovingExistingStacks() {
+        DynamicCapacityInventory inventory = new DynamicCapacityInventory(() -> 10_000);
+        inventory.replaceSyntheticSlotFromItemUse(9, new ItemStack(Items.DIRT, 3));
+        List<ItemStack> orderedBefore = inventory.visibleCompatibilitySnapshot();
+        inventory.replaceSyntheticSlotFromItemUse(35, new ItemStack(Items.STONE, 7));
+
+        assertTrue(inventory.relocateReceivedVisibleStacks(orderedBefore, false));
+        assertEquals(Items.DIRT, inventory.syntheticStack(9).getItem());
+        assertEquals(Items.STONE, inventory.syntheticStack(10).getItem());
+        assertTrue(inventory.syntheticStack(35).isEmpty());
+
+        List<ItemStack> backendBefore = inventory.visibleCompatibilitySnapshot();
+        inventory.replaceSyntheticSlotFromItemUse(10, new ItemStack(Items.STONE, 12));
+        assertTrue(inventory.relocateReceivedVisibleStacks(backendBefore, true));
+        assertEquals(Items.STONE, inventory.syntheticStack(10).getItem());
+        assertEquals(7, inventory.syntheticStack(10).getCount());
+        assertEquals(Items.STONE, inventory.syntheticStack(36).getItem());
+        assertEquals(5, inventory.syntheticStack(36).getCount());
+        assertTrue(inventory.validate());
+    }
+
+    @Test
+    void nativeMenuQuickMoveStagingRestoresTheVisibleSlotAndKeepsOnlyTheRemainder() {
+        DynamicCapacityInventory inventory = new DynamicCapacityInventory(() -> 10_000);
+        inventory.replaceSyntheticSlotFromItemUse(9, new ItemStack(Items.DIRT, 5));
+        inventory.replaceSyntheticSlotFromItemUse(36, new ItemStack(Items.STONE, 64));
+
+        DynamicCapacityInventory.BackendQuickMoveStage stage =
+                inventory.beginBackendQuickMove(new ItemStack(Items.STONE), 9);
+        assertEquals(Items.STONE, inventory.syntheticStack(9).getItem());
+        assertEquals(64, inventory.syntheticStack(9).getCount());
+        inventory.extractSyntheticSlot(9, 40, false);
+
+        assertEquals(40, inventory.finishBackendQuickMove(stage));
+        assertEquals(Items.DIRT, inventory.syntheticStack(9).getItem());
+        assertEquals(5, inventory.syntheticStack(9).getCount());
+        assertEquals(Items.STONE, inventory.syntheticStack(36).getItem());
+        assertEquals(24, inventory.syntheticStack(36).getCount());
+        assertTrue(inventory.validate());
+    }
+
+    @Test
     void capacityChangesAreLiveAndNeverDeleteItems() {
         AtomicLong capacity = new AtomicLong(128);
         DynamicCapacityInventory inventory = new DynamicCapacityInventory(capacity::get);

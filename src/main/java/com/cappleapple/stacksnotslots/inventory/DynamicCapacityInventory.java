@@ -105,6 +105,13 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
         return backingStacks.stream().map(ItemStack::copy).toList();
     }
 
+    /** Snapshot used to identify only the stacks received by a native container quick-move. */
+    public List<ItemStack> visibleCompatibilitySnapshot() {
+        ArrayList<ItemStack> snapshot = new ArrayList<>(36);
+        for (int slot = 0; slot < 36; slot++) snapshot.add(syntheticStack(slot));
+        return List.copyOf(snapshot);
+    }
+
     /** Indexed synthetic-slot extent. It grows dynamically and has no fixed ceiling. */
     public int syntheticSlotCount() {
         return backingStacks.size();
@@ -197,6 +204,31 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
     }
 
     /**
+     * Inserts a container transfer into the main grid from left to right and top to bottom, then
+     * the hotbar, then the unbounded backend. Existing compatible visible stacks are filled first.
+     */
+    public InsertionResult insertInPlayerTransferOrder(ItemStack stack, boolean simulate) {
+        if (stack == null || stack.isEmpty() || stack.getCount() <= 0) {
+            return new InsertionResult(stack == null ? 0 : Math.max(0, stack.getCount()), 0,
+                    ItemStack.EMPTY, 0, InsertionRejection.INVALID_ITEM);
+        }
+        int requested = stack.getCount();
+        long unitCost = CapacityCosts.unitCost(stack);
+        long available = capacity() - usedCapacity;
+        if (available < 0) return rejected(stack, requested, InsertionRejection.OVER_CAPACITY);
+        int accepted = (int)Math.min(requested, Math.min(Integer.MAX_VALUE, available / unitCost));
+        if (accepted <= 0) return rejected(stack, requested, InsertionRejection.GLOBAL_CAPACITY);
+        if (!simulate) {
+            addInPlayerTransferOrder(stack, accepted);
+            usedCapacity = saturatedAdd(usedCapacity, CapacityCosts.cost(stack, accepted));
+            changed();
+        }
+        ItemStack remainder = accepted == requested ? ItemStack.EMPTY : stack.copyWithCount(requested - accepted);
+        InsertionRejection rejection = accepted == requested ? InsertionRejection.NONE : InsertionRejection.GLOBAL_CAPACITY;
+        return new InsertionResult(requested, accepted, remainder, CapacityCosts.cost(stack, accepted), rejection);
+    }
+
+    /**
      * Inserts without touching compatibility slots below {@code minimumSlot}. This is used for
      * pickup-to-hotbar preferences and explicit backend stowing; capacity remains the only limit.
      */
@@ -278,6 +310,84 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
         recalculateCapacity();
         changed();
         return true;
+    }
+
+    /**
+     * Temporarily stages one backend stack in a visible player slot so the active menu can run its
+     * own quick-move implementation. The displaced visible stack remains owned by this transaction.
+     */
+    public BackendQuickMoveStage beginBackendQuickMove(ItemStack prototype, int playerSlot) {
+        if (prototype == null || prototype.isEmpty() || playerSlot < 0 || playerSlot >= 36) return null;
+        int sourceSlot = -1;
+        for (int slot = 36; slot < backingStacks.size(); slot++) {
+            if (ItemStack.isSameItemSameComponents(backingStacks.get(slot), prototype)) {
+                sourceSlot = slot;
+                break;
+            }
+        }
+        if (sourceSlot < 0) return null;
+
+        ensureSyntheticSlot(playerSlot);
+        ItemStack staged = backingStacks.get(sourceSlot);
+        ItemStack displaced = backingStacks.get(playerSlot);
+        int stagedCount = staged.getCount();
+        backingStacks.set(playerSlot, staged);
+        backingStacks.set(sourceSlot, ItemStack.EMPTY);
+        recalculateCapacity();
+        changed();
+        return new BackendQuickMoveStage(playerSlot, sourceSlot, displaced, staged.copyWithCount(1), stagedCount);
+    }
+
+    /** Restores the staged player slot and returns the amount accepted by the active menu. */
+    public int finishBackendQuickMove(BackendQuickMoveStage stage) {
+        if (stage == null || stage.finished) return 0;
+        stage.finished = true;
+        ItemStack remainder = stage.playerSlot < backingStacks.size()
+                ? backingStacks.get(stage.playerSlot) : ItemStack.EMPTY;
+        int remaining = ItemStack.isSameItemSameComponents(remainder, stage.prototype)
+                ? Math.min(stage.stagedCount, remainder.getCount()) : 0;
+
+        ensureSyntheticSlot(stage.sourceSlot);
+        backingStacks.set(stage.sourceSlot, remainder.isEmpty() ? ItemStack.EMPTY : remainder);
+        ensureSyntheticSlot(stage.playerSlot);
+        backingStacks.set(stage.playerSlot, stage.displaced.isEmpty() ? ItemStack.EMPTY : stage.displaced);
+        trimTrailingEmptySlots();
+        recalculateCapacity();
+        changed();
+        return stage.stagedCount - remaining;
+    }
+
+    /**
+     * Repositions only the positive player-slot deltas produced by a custom menu quick-move.
+     * Existing visible stacks and their placement remain untouched.
+     */
+    public boolean relocateReceivedVisibleStacks(List<ItemStack> before, boolean backendOnly) {
+        if (before == null || before.size() < 36) return false;
+        ArrayList<ReceivedStack> received = new ArrayList<>();
+        for (int slot = 0; slot < 36; slot++) {
+            ItemStack previous = before.get(slot);
+            ItemStack current = syntheticStack(slot);
+            int amount = previous.isEmpty() ? current.getCount()
+                    : ItemStack.isSameItemSameComponents(previous, current)
+                            ? Math.max(0, current.getCount() - previous.getCount()) : 0;
+            if (amount > 0) received.add(new ReceivedStack(slot, current.copyWithCount(amount)));
+        }
+        if (received.isEmpty()) return false;
+
+        ArrayList<ItemStack> extracted = new ArrayList<>(received.size());
+        for (ReceivedStack value : received) {
+            ItemStack moved = extractSyntheticSlot(value.slot, value.stack.getCount(), false);
+            if (!moved.isEmpty()) extracted.add(moved);
+        }
+        for (ItemStack moved : extracted) {
+            InsertionResult insertion = backendOnly
+                    ? insertAtOrAfter(moved, 36, false)
+                    : insertInPlayerTransferOrder(moved, false);
+            if (!insertion.acceptedAll()) {
+                insertAtOrAfter(insertion.remainder(), 36, false);
+            }
+        }
+        return !extracted.isEmpty();
     }
 
     /** Atomically swaps two compatibility positions. Used only by an explicit hotbar-cycle key press. */
@@ -652,6 +762,36 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
         }
     }
 
+    private void addInPlayerTransferOrder(ItemStack incoming, int amount) {
+        int remaining = amount;
+        if (incoming.isStackable()) {
+            for (int ordinal = 0; ordinal < 36 && remaining > 0; ordinal++) {
+                int slot = playerTransferSlot(ordinal);
+                if (slot >= backingStacks.size()) continue;
+                ItemStack stored = backingStacks.get(slot);
+                if (stored.isEmpty() || !ItemStack.isSameItemSameComponents(stored, incoming)) continue;
+                int moved = Math.min(remaining, stored.getMaxStackSize() - stored.getCount());
+                if (moved > 0) {
+                    stored.grow(moved);
+                    remaining -= moved;
+                }
+            }
+        }
+        for (int ordinal = 0; ordinal < 36 && remaining > 0; ordinal++) {
+            int slot = playerTransferSlot(ordinal);
+            if (slot < backingStacks.size() && !backingStacks.get(slot).isEmpty()) continue;
+            ensureSyntheticSlot(slot);
+            int moved = Math.min(remaining, incoming.getMaxStackSize());
+            backingStacks.set(slot, incoming.copyWithCount(moved));
+            remaining -= moved;
+        }
+        if (remaining > 0) addLegalStacks(incoming, remaining, 36);
+    }
+
+    private static int playerTransferSlot(int ordinal) {
+        return ordinal < 27 ? ordinal + 9 : ordinal - 27;
+    }
+
     /** Avoids reusing a live reference that vanilla has temporarily shrunk to zero mid-transaction. */
     private int firstCanonicalEmptySlot(int minimumSlot) {
         for (int slot = minimumSlot; slot < backingStacks.size(); slot++) {
@@ -727,6 +867,26 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
         private Aggregate(ItemStack representative) { this.representative = representative; }
         private void add(int amount) { quantity += amount; backingStackCount++; }
     }
+
+    public static final class BackendQuickMoveStage {
+        private final int playerSlot;
+        private final int sourceSlot;
+        private final ItemStack displaced;
+        private final ItemStack prototype;
+        private final int stagedCount;
+        private boolean finished;
+
+        private BackendQuickMoveStage(int playerSlot, int sourceSlot, ItemStack displaced,
+                                      ItemStack prototype, int stagedCount) {
+            this.playerSlot = playerSlot;
+            this.sourceSlot = sourceSlot;
+            this.displaced = displaced;
+            this.prototype = prototype;
+            this.stagedCount = stagedCount;
+        }
+    }
+
+    private record ReceivedStack(int slot, ItemStack stack) {}
 
     private static final class StackIdentity {
         private final ItemStack stack;

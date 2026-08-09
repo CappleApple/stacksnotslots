@@ -38,6 +38,7 @@ public final class ContainerTransfers {
     public static boolean moveBackendEntryToMenu(ServerPlayer player, ItemStack prototype) {
         DynamicCapacityInventory inventory = player.getData(ModAttachments.PLAYER_DATA).inventory();
         if (player.containerMenu == player.inventoryMenu) return inventory.moveBackendStackToMain(prototype);
+        if (moveBackendEntryWithNativeQuickMove(player, prototype, inventory)) return true;
         List<Range> ranges = externalRanges(player.containerMenu, player);
         if (ranges.isEmpty()) return false;
         int available = inventory.extractAtOrAfter(prototype, prototype.getMaxStackSize(), 36, true).extractedAmount();
@@ -50,6 +51,41 @@ public final class ContainerTransfers {
         inventory.extractAtOrAfter(prototype, moved, 36, false);
         player.containerMenu.broadcastChanges();
         return true;
+    }
+
+    /**
+     * Stages a backend stack in a real player slot, invokes the active menu's own quick-move path,
+     * then restores the displaced player stack. This supports virtual storage terminals and custom
+     * merge logic without compile-time dependencies or per-mod handlers.
+     */
+    private static boolean moveBackendEntryWithNativeQuickMove(ServerPlayer player, ItemStack prototype,
+                                                                DynamicCapacityInventory inventory) {
+        AbstractContainerMenu menu = player.containerMenu;
+        for (int ordinal = 0; ordinal < 36; ordinal++) {
+            int playerSlot = ordinal < 27 ? ordinal + 9 : ordinal - 27;
+            for (int menuIndex = 0; menuIndex < menu.slots.size(); menuIndex++) {
+                Slot slot = menu.slots.get(menuIndex);
+                if (!isPlayerSlot(slot, player) || slot.getContainerSlot() != playerSlot || !slot.isActive()) continue;
+                DynamicCapacityInventory.BackendQuickMoveStage stage =
+                        inventory.beginBackendQuickMove(prototype, playerSlot);
+                if (stage == null) return false;
+                if (!slot.hasItem() || !slot.mayPickup(player)) {
+                    inventory.finishBackendQuickMove(stage);
+                    continue;
+                }
+
+                int moved;
+                try {
+                    menu.quickMoveStack(player, menuIndex);
+                } finally {
+                    moved = inventory.finishBackendQuickMove(stage);
+                }
+                if (moved <= 0) continue;
+                menu.broadcastChanges();
+                return true;
+            }
+        }
+        return false;
     }
 
     private static List<TransferredStack> movePlayerToOpenMenu(ServerPlayer player) {

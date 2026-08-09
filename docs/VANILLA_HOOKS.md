@@ -26,7 +26,9 @@ Vanilla menu transfer logic splits source stacks before calling `Inventory.setIt
 
 ## Menu shift-click and equipment mixins
 
-`AbstractContainerMenuMixin` recognizes destination ranges made entirely of vanilla player-storage slots and routes the source directly through the central insertion transaction. This allows chest, furnace, crafting-result, and modded-menu shift-clicks to append beyond the 36-slot projection whenever capacity remains.
+`AbstractContainerMenuMixin` recognizes destination ranges made entirely of vanilla player-storage slots and routes the source directly through the central insertion transaction. Closed-browser transfers fill the main grid in display order, then the hotbar, then the backend; an open browser routes them directly to the backend. This allows chest, furnace, crafting-result, and modded-menu shift-clicks to append beyond the 36-slot projection whenever capacity remains.
+
+Menus that bypass vanilla's `moveItemStackTo` helper are reconciled after their native quick-move finishes. Only positive changes relative to the pre-click player view are relocated, so custom menu bookkeeping runs normally and existing player-slot placement is preserved. Browser-to-container transfers temporarily stage one backend stack in a real player slot and call the active menu's own `quickMoveStack`, allowing virtual terminals and custom storage merge logic to select their proper destination without per-mod dependencies.
 
 When the source is already owned by the player, the mixin leaves the operation to vanilla. Main-grid/hotbar shift-clicks therefore keep their normal destination ranges, and shift-equipping armor/offhand remains active. While the browser is open, its topmost input layer explicitly converts player-slot shift-clicks into backend stows instead.
 

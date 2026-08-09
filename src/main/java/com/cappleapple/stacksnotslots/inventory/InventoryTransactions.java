@@ -89,4 +89,24 @@ public final class InventoryTransactions {
                 : accepted < stack.getCount() ? InsertionRejection.CATEGORY_LIMIT : InsertionRejection.NONE;
         return new InsertionResult(stack.getCount(), accepted, remainder, result.capacityConsumed(), reason);
     }
+
+    /** Manual container transfer using the visible main-grid/hotbar order before backend overflow. */
+    public static InsertionResult insertInPlayerTransferOrder(Player player, ItemStack stack, boolean simulate) {
+        PlayerInventoryData data = player.getData(ModAttachments.PLAYER_DATA);
+        DynamicCapacityInventory inventory = data.inventory();
+        boolean enforceCategoryLimits = CommonConfig.CATEGORY_LIMITS_MANUAL_TRANSFERS.getAsBoolean();
+        int allowed = enforceCategoryLimits
+                ? PickupLimitCalculator.maximumAccepted(inventory, data.categories().categories(), stack, stack.getCount())
+                : stack.getCount();
+        if (allowed <= 0) {
+            return new InsertionResult(stack.getCount(), 0, stack.copy(), 0, InsertionRejection.CATEGORY_LIMIT);
+        }
+        ItemStack limited = allowed == stack.getCount() ? stack : stack.copyWithCount(allowed);
+        InsertionResult result = inventory.insertInPlayerTransferOrder(limited, simulate);
+        int accepted = result.acceptedAmount();
+        ItemStack remainder = accepted == stack.getCount() ? ItemStack.EMPTY : stack.copyWithCount(stack.getCount() - accepted);
+        InsertionRejection reason = accepted < allowed ? result.rejection()
+                : accepted < stack.getCount() ? InsertionRejection.CATEGORY_LIMIT : InsertionRejection.NONE;
+        return new InsertionResult(stack.getCount(), accepted, remainder, result.capacityConsumed(), reason);
+    }
 }

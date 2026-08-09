@@ -87,11 +87,14 @@ dependencies {
     def localEmi = fileTree('modstotestwith') { include 'emi-*.jar' }
     def localSophisticated = fileTree('modstotestwith') { include 'sophisticated*.jar' }
     def localMouseTweaks = fileTree('modstotestwith') { include 'MouseTweaks-*.jar' }
+    def localTomsStorage = fileTree('modstotestwith') { include 'toms_storage-*.jar' }
     if (!localJei.files.isEmpty()) compileOnly files(localJei)
     else compileOnly 'mezz.jei:jei-1.21.1-neoforge-api:19.42.0.379'
     if (!localEmi.files.isEmpty()) compileOnly files(localEmi)
     else compileOnly 'dev.emi:emi-neoforge:1.1.24+1.21.1'
-    if (!project.hasProperty('skipOptionalCompatRuntime')) localRuntime files(localJei, localEmi, localSophisticated, localMouseTweaks)
+    if (!project.hasProperty('skipOptionalCompatRuntime')) {
+        localRuntime files(localJei, localEmi, localSophisticated, localMouseTweaks, localTomsStorage)
+    }
 }
 
 tasks.named('test', Test).configure {
