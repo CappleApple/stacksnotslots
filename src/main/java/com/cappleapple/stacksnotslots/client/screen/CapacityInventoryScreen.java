@@ -135,13 +135,15 @@ public final class CapacityInventoryScreen extends InventoryScreen {
                 hovered ? 0xFFF0F0F0 : 0xFFC6C6C6);
         graphics.fill(selectorX + 2, selectorY + 2, selectorX + SELECTOR_WIDTH - 2, selectorY + SELECTOR_HEIGHT - 2,
                 categoryMenuOpen ? 0xFF356DA5 : hovered ? 0xFF777777 : 0xFF555555);
-        ItemStack icon = Screen.hasShiftDown() ? new ItemStack(Items.STICKY_PISTON) : CategoryIcons.displayStack(currentCategory());
+        CategoryDefinition displayedCategory = categoryMenuOpen ? categoryAt(categoryMenuCenter) : currentCategory();
+        ItemStack icon = Screen.hasShiftDown() ? new ItemStack(Items.STICKY_PISTON) : CategoryIcons.displayStack(displayedCategory);
         graphics.renderItem(icon, selectorX + 2, selectorY + 1);
         if (hovered) {
-            CategoryDefinition category = currentCategory();
             selectorTooltip = Screen.hasShiftDown()
                     ? Component.translatable("gui.stacksnotslots.stow_main_grid")
-                    : Component.literal(category == null ? Component.translatable("gui.stacksnotslots.all").getString() : category.displayName());
+                    : Component.literal(displayedCategory == null
+                            ? Component.translatable("gui.stacksnotslots.all").getString()
+                            : displayedCategory.displayName());
         }
     }
 
@@ -150,6 +152,7 @@ public final class CapacityInventoryScreen extends InventoryScreen {
         if (categories.isEmpty()) return;
         int top = menuTop();
         for (int offset = -2; offset <= 2; offset++) {
+            if (offset == 0) continue; // The draggable selector is the carousel's center cell.
             CategoryDefinition category = categories.get(Math.floorMod(categoryMenuCenter + offset, categories.size()));
             int y = top + (offset + 2) * MENU_STEP;
             int alpha = switch (Math.abs(offset)) { case 0 -> 245; case 1 -> 165; default -> 65; };
@@ -193,7 +196,12 @@ public final class CapacityInventoryScreen extends InventoryScreen {
         PacketDistributor.sendToServer(new InventoryViewPreferencesPayload(selected.sortMode(), selected.id()));
     }
 
-    private int menuTop() { return Math.max(0, selectorY - MENU_STEP * 5 - 2); }
+    private int menuTop() { return selectorY - MENU_STEP * 2; }
+
+    private CategoryDefinition categoryAt(int index) {
+        List<CategoryDefinition> categories = categories();
+        return categories.isEmpty() ? null : categories.get(Math.floorMod(index, categories.size()));
+    }
 
     private CategoryDefinition currentCategory() {
         List<CategoryDefinition> categories = categories();

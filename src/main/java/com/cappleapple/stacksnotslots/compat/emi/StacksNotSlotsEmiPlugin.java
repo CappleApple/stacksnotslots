@@ -13,8 +13,10 @@ import net.minecraft.client.renderer.Rect2i;
 public final class StacksNotSlotsEmiPlugin implements EmiPlugin {
     @Override
     public void register(EmiRegistry registry) {
-        registry.addExclusionArea(AbstractContainerScreen.class, (screen, consumer) -> {
-            for (Rect2i area : ContainerInventoryOverlay.currentAreas(screen)) {
+        // Use EMI's global provider rather than attaching a competing handler to every subclass.
+        registry.addGenericExclusionArea((screen, consumer) -> {
+            if (!(screen instanceof AbstractContainerScreen<?> containerScreen)) return;
+            for (Rect2i area : ContainerInventoryOverlay.currentAreas(containerScreen)) {
                 consumer.accept(new Bounds(area.getX(), area.getY(), area.getWidth(), area.getHeight()));
             }
         });

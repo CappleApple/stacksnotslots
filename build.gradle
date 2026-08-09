@@ -127,11 +127,12 @@ dependencies {
     def localJei = fileTree('modstotestwith') { include 'jei-*.jar' }
     def localEmi = fileTree('modstotestwith') { include 'emi-*.jar' }
     def localSophisticated = fileTree('modstotestwith') { include 'sophisticated*.jar' }
+    def localMouseTweaks = fileTree('modstotestwith') { include 'MouseTweaks-*.jar' }
     if (!localJei.files.isEmpty()) compileOnly files(localJei)
     else compileOnly 'mezz.jei:jei-1.21.1-neoforge-api:19.42.0.379'
     if (!localEmi.files.isEmpty()) compileOnly files(localEmi)
     else compileOnly 'dev.emi:emi-neoforge:1.1.24+1.21.1'
-    if (!project.hasProperty('skipOptionalCompatRuntime')) localRuntime files(localJei, localEmi, localSophisticated)
+    if (!project.hasProperty('skipOptionalCompatRuntime')) localRuntime files(localJei, localEmi, localSophisticated, localMouseTweaks)
     // Example optional mod dependency with JEI
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
     // compileOnly "mezz.jei:jei-${mc_version}-common-api:${jei_version}"
