@@ -10,7 +10,6 @@ import java.util.List;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
-import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
@@ -56,10 +55,6 @@ public final class CapacityInventoryScreen extends InventoryScreen {
         selectorX = clamp(leftPos + ClientConfig.CATEGORY_SELECTOR_X.getAsInt(), 0, width - SELECTOR_WIDTH);
         selectorY = clamp(topPos + ClientConfig.CATEGORY_SELECTOR_Y.getAsInt(), 0, height - SELECTOR_HEIGHT);
     }
-
-    public void focusSearch() { ContainerInventoryOverlay.focusSearch(); }
-    public boolean isDrawerOpen() { return ContainerInventoryOverlay.isOpen(); }
-    public Rect2i drawerBounds() { return ContainerInventoryOverlay.currentBounds(this); }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
@@ -111,6 +106,7 @@ public final class CapacityInventoryScreen extends InventoryScreen {
         } else {
             ClientConfig.CATEGORY_SELECTOR_X.set(selectorX - leftPos);
             ClientConfig.CATEGORY_SELECTOR_Y.set(selectorY - topPos);
+            ClientConfig.SPEC.save();
         }
         return true;
     }

@@ -125,6 +125,7 @@ public final class InventoryBrowserSettingsScreen extends Screen {
         ClientConfig.BROWSER_HANDLE_ICON.set(handleIcon.getValue().trim());
         ClientConfig.MANAGE_TABS_ICON.set(manageIcon.getValue().trim());
         ClientConfig.SETTINGS_ICON.set(settingsIcon.getValue().trim());
+        ClientConfig.SPEC.save();
         onClose();
     }
 

@@ -1,5 +1,6 @@
 package com.cappleapple.stacksnotslots.config;
 
+import java.util.List;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 public final class ClientConfig {
@@ -29,6 +30,7 @@ public final class ClientConfig {
     public static final ModConfigSpec.IntValue BROWSER_HANDLE_Y;
     public static final ModConfigSpec.BooleanValue BROWSER_HANDLE_VISIBLE;
     public static final ModConfigSpec.EnumValue<BrowserDockSide> BROWSER_DOCK_SIDE;
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> BROWSER_SCREEN_STATES;
     public static final ModConfigSpec.BooleanValue AUTO_BROWSER_DOCK_SIDE;
     public static final ModConfigSpec.IntValue AUTO_DOCK_DEAD_ZONE_X;
     public static final ModConfigSpec.IntValue AUTO_DOCK_DEAD_ZONE_Y;
@@ -53,10 +55,13 @@ public final class ClientConfig {
         MANAGE_TABS_ICON = builder.define("manageTabsIcon", "minecraft:name_tag");
         SETTINGS_ICON = builder.define("settingsIcon", "minecraft:redstone");
         BROWSER_HANDLE_ICON = builder.define("browserHandleIcon", "minecraft:spyglass");
+        // These four values remain defaults for screen types without a saved state, preserving old configs.
         BROWSER_HANDLE_X = builder.defineInRange("browserHandleX", -1, -1, 16384);
         BROWSER_HANDLE_Y = builder.defineInRange("browserHandleY", -1, -1, 16384);
         BROWSER_HANDLE_VISIBLE = builder.define("browserHandleVisible", true);
         BROWSER_DOCK_SIDE = builder.defineEnum("browserDockSide", BrowserDockSide.RIGHT);
+        BROWSER_SCREEN_STATES = builder.comment("Internal per-screen browser position, visibility, open state, and dock side")
+                .defineListAllowEmpty("browserScreenStates", List.of(), null, value -> value instanceof String);
         AUTO_BROWSER_DOCK_SIDE = builder.define("autoChooseBrowserSide", true);
         AUTO_DOCK_DEAD_ZONE_X = builder.defineInRange("autoSideDeadZoneX", 48, 0, 4096);
         AUTO_DOCK_DEAD_ZONE_Y = builder.defineInRange("autoSideDeadZoneY", 36, 0, 4096);

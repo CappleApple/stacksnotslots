@@ -67,7 +67,7 @@ The built mod is written to `build/libs/stacksnotslots-0.6.0.jar`. The project u
 
 ## Player usage
 
-Open the normal inventory to see the familiar vanilla layout. Click the spyglass handle to open the inventory browser. Hold and drag the handle anywhere over a container screen to reposition it; its blue state shows that the browser is open. The browser can open left, right, above, or below the handle and renders above the underlying menu. Control-F toggles the handle and closes an open browser.
+Open the normal inventory to see the familiar vanilla layout. Click the spyglass handle to open the inventory browser. Drag it at least a few pixels to reposition it; its blue state shows that the browser is open. The browser can open left, right, above, or below the handle and renders above the underlying menu. Position, docking, open state, and visibility are remembered independently for each container-screen type. Control-F toggles the handle and closes an open browser.
 
 - Left-click an entry to move a legal stack to the cursor.
 - Right-click an entry to move half a legal stack to the cursor.
@@ -81,8 +81,11 @@ Open the normal inventory to see the familiar vanilla layout. Click the spyglass
 - Selecting a category or sort mode performs one explicit arrangement of the main 27-slot grid. It displays one stack per distinct matching identity; subsequent placement is fully manual until another category or sort control is clicked.
 - Hotbar bindings never restrict placement or rearrange items automatically. The configurable forward/backward cycle keys explicitly swap the selected position with the next owned item in its assigned category.
 - Every container screen can show the same draggable browser; take any logical entry to the cursor and place it into the container normally.
+- Right-click the search field to clear it. Control-A selects the complete query so Backspace, Delete, or newly typed text can replace it.
 
 An empty search shows the selected category. A non-empty search spans every category and matches display names, full registry IDs, mod namespaces (prefix with `@`), item tags (prefix with `#`), and optionally cached tooltip text. Search results retain the selected sort order. Category rules accept exact items, `#tags`, and `@modid` namespaces. Sort modes cover name, quantity, registry ID, and namespace; the current sort and category selection persist with player data.
+
+The browser never extends beyond the screen edge or across its handle. It reduces visible rows or columns when space is limited, while retaining at least one item row or column. Top and bottom docking use left/right control rails so the search field remains at the top and horizontal space is available to item results.
 
 ## Capacity and over-capacity behavior
 
@@ -131,8 +134,9 @@ Player customizations are persisted per player and are not overwritten when serv
 - `browserItemCountMode` — `EXACT`, `COMPACT` (default), `STACKS`, `STACKS_REMAINDER`, or `PERCENTAGE`
 - `browserOverallCountMode` — `EXACT`, `COMPACT`, `STACKS` (default), or `PERCENTAGE`
 - `manageTabsIcon`, `settingsIcon`, and `browserHandleIcon` — configurable item IDs for the square controls and draggable handle
-- `browserHandleX`, `browserHandleY`, and `browserHandleVisible` — persisted floating-handle placement and visibility
-- `browserDockSide` / `autoChooseBrowserSide` — explicit four-direction docking and optional side selection while dragging
+- `browserHandleX`, `browserHandleY`, `browserHandleVisible`, and `browserDockSide` — defaults for container-screen types without saved state
+- `browserScreenStates` — internal per-screen-type placement, docking, open, and visibility state
+- `autoChooseBrowserSide` — optional side selection while dragging
 - `autoSideDeadZoneX` / `autoSideDeadZoneY` — center-screen dead-zone half sizes for automatic docking
 - `showBulkTransferOverlay` / `bulkTransferOverlaySeconds` — in-world bulk-transfer feedback and duration
 
