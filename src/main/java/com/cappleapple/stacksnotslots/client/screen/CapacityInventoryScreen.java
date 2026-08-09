@@ -118,7 +118,7 @@ public final class CapacityInventoryScreen extends InventoryScreen {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (inside(mouseX, mouseY, selectorX, selectorY, SELECTOR_WIDTH, SELECTOR_HEIGHT)) {
-            if (!categoryMenuOpen) selectRelative(scrollY > 0 ? -1 : 1);
+            selectRelative(scrollY > 0 ? -1 : 1);
             return true;
         }
         if (categoryMenuOpen && inside(mouseX, mouseY, selectorX, menuTop(), SELECTOR_WIDTH, MENU_STEP * 5)) {

@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Predicate;
 import java.util.function.LongSupplier;
 import java.util.concurrent.CopyOnWriteArrayList;
 import net.minecraft.core.HolderLookup;
@@ -130,6 +131,16 @@ public final class DynamicCapacityInventory implements ICapacityInventory, INBTS
     /** Live reference used only by the isolated vanilla Inventory compatibility mixin. */
     public ItemStack vanillaStackReference(int slot) {
         return slot >= 0 && slot < backingStacks.size() ? backingStacks.get(slot) : ItemStack.EMPTY;
+    }
+
+    /** Live reference for vanilla systems that consume or damage a matching backend stack in place. */
+    public ItemStack findLiveStackReference(int minimumSlot, Predicate<ItemStack> predicate) {
+        Objects.requireNonNull(predicate);
+        for (int slot = Math.max(0, minimumSlot); slot < backingStacks.size(); slot++) {
+            ItemStack stack = backingStacks.get(slot);
+            if (!stack.isEmpty() && predicate.test(stack)) return stack;
+        }
+        return ItemStack.EMPTY;
     }
 
     public ItemStack findVanillaStackReference(ItemStack prototype) {

@@ -3,6 +3,7 @@ package com.cappleapple.stacksnotslots.inventory;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -275,6 +276,23 @@ class DynamicCapacityInventoryTest {
         assertEquals(1, inventory.entriesAtOrAfter(36).size());
         assertEquals(Items.STONE, inventory.entriesAtOrAfter(36).getFirst().representative().getItem());
         assertEquals(9, inventory.entriesAtOrAfter(36).getFirst().quantity());
+    }
+
+    @Test
+    void liveCompatibilityLookupCanConsumeAProjectileFromBackendOnly() {
+        DynamicCapacityInventory inventory = new DynamicCapacityInventory(() -> 512);
+        inventory.replaceSyntheticSlot(0, new ItemStack(Items.ARROW, 3));
+        inventory.replaceSyntheticSlot(36, new ItemStack(Items.ARROW, 2));
+
+        ItemStack backendArrow = inventory.findLiveStackReference(36, stack -> stack.is(Items.ARROW));
+        assertSame(inventory.vanillaStackReference(36), backendArrow);
+        backendArrow.shrink(1);
+        inventory.reconcileExternalMutations();
+
+        assertEquals(3, inventory.syntheticStack(0).getCount());
+        assertEquals(1, inventory.syntheticStack(36).getCount());
+        assertEquals(4, inventory.usedCapacity());
+        assertTrue(inventory.validate());
     }
 
     @Test

@@ -318,7 +318,7 @@ public final class ContainerInventoryOverlay {
         }
         if (!inside(mouseX, mouseY, layout.contentX, layout.contentY, layout.contentWidth, layout.contentHeight)) return false;
         int page = ClientConfig.BROWSER_VIEW_MODE.get() == ClientConfig.BrowserViewMode.GRID
-                ? ClientConfig.BROWSER_GRID_COLUMNS.getAsInt() : 1;
+                ? layout.gridColumns : 1;
         int maximum = Math.max(0, entries().size() - layout.visibleEntryCount);
         scroll = clamp(scroll - (int)Math.signum(deltaY) * page, 0, maximum);
         return true;
@@ -374,7 +374,7 @@ public final class ContainerInventoryOverlay {
 
     private static void renderGrid(GuiGraphics graphics, PanelLayout layout, List<LogicalInventoryEntry> entries, int mouseX, int mouseY) {
         Minecraft minecraft = Minecraft.getInstance();
-        int columns = ClientConfig.BROWSER_GRID_COLUMNS.getAsInt();
+        int columns = layout.gridColumns;
         long capacity = minecraft.player.getData(ModAttachments.PLAYER_DATA).inventory().capacity();
         for (int offset = 0; offset < layout.visibleEntryCount; offset++) {
             int index = scroll + offset;
@@ -455,8 +455,8 @@ public final class ContainerInventoryOverlay {
         if (ClientConfig.BROWSER_VIEW_MODE.get() == ClientConfig.BrowserViewMode.GRID) {
             int column = ((int)mouseX - layout.contentX) / GRID_CELL;
             int row = ((int)mouseY - layout.contentY) / GRID_CELL;
-            if (column >= ClientConfig.BROWSER_GRID_COLUMNS.getAsInt() || row >= layout.visibleEntryCount / ClientConfig.BROWSER_GRID_COLUMNS.getAsInt()) return null;
-            offset = row * ClientConfig.BROWSER_GRID_COLUMNS.getAsInt() + column;
+            if (column >= layout.gridColumns || row >= layout.visibleEntryCount / layout.gridColumns) return null;
+            offset = row * layout.gridColumns + column;
         } else offset = ((int)mouseY - layout.contentY) / LIST_ROW;
         List<LogicalInventoryEntry> entries = entries();
         int index = scroll + offset;
@@ -641,24 +641,29 @@ public final class ContainerInventoryOverlay {
     }
 
     private static PanelLayout layout(AbstractContainerScreen<?> screen) {
-        int width = panelWidth();
+        ClientConfig.BrowserDockSide side = ClientConfig.BROWSER_DOCK_SIDE.get();
+        int gridColumns = 1;
         int visibleCount;
         int contentWidth;
         int contentHeight;
+        int width;
         if (ClientConfig.BROWSER_VIEW_MODE.get() == ClientConfig.BrowserViewMode.GRID) {
-            int columns = ClientConfig.BROWSER_GRID_COLUMNS.getAsInt();
-            int rows = Math.min(ClientConfig.BROWSER_GRID_ROWS.getAsInt(), Math.max(1, (screen.height - 99) / GRID_CELL));
-            visibleCount = columns * rows;
-            contentWidth = columns * GRID_CELL;
-            contentHeight = rows * GRID_CELL;
+            BrowserGridDimensions dimensions = BrowserGridDimensions.forDock(
+                    ClientConfig.BROWSER_GRID_COLUMNS.getAsInt(), ClientConfig.BROWSER_GRID_ROWS.getAsInt(),
+                    Math.max(1, (screen.height - 99) / GRID_CELL), side);
+            gridColumns = dimensions.columns();
+            visibleCount = gridColumns * dimensions.rows();
+            contentWidth = gridColumns * GRID_CELL;
+            contentHeight = dimensions.rows() * GRID_CELL;
+            width = Math.max(68, contentWidth + 8);
         } else {
             int rows = Math.min(Math.max(6, ClientConfig.BROWSER_GRID_ROWS.getAsInt()), Math.max(1, (screen.height - 99) / LIST_ROW));
             visibleCount = rows;
+            width = 170;
             contentWidth = width - 8;
             contentHeight = rows * LIST_ROW;
         }
         int height = 95 + contentHeight;
-        ClientConfig.BrowserDockSide side = ClientConfig.BROWSER_DOCK_SIDE.get();
         int rawX = switch (side) {
             case LEFT -> handleX - width - 2;
             case RIGHT -> handleX + HANDLE_WIDTH + 2;
@@ -679,13 +684,8 @@ public final class ContainerInventoryOverlay {
         int capacityBarY = capacityTextY + 11;
         int bottomY = capacityBarY + 7;
         return new PanelLayout(x, y, width, height, x + 4, y + 5, width - 8, controlsY,
-                x + 2, x + 24, x + width - 22, contentX, contentY, contentWidth, contentHeight, visibleCount,
+                x + 2, x + 24, x + width - 22, contentX, contentY, contentWidth, contentHeight, visibleCount, gridColumns,
                 capacityTextY, capacityBarY, x + 2, x + 24, x + width - 22, bottomY);
-    }
-
-    private static int panelWidth() {
-        if (ClientConfig.BROWSER_VIEW_MODE.get() == ClientConfig.BrowserViewMode.LIST) return 170;
-        return Math.max(68, ClientConfig.BROWSER_GRID_COLUMNS.getAsInt() * GRID_CELL + 8);
     }
 
     private static Rect2i panelBounds(AbstractContainerScreen<?> screen) {
@@ -723,7 +723,7 @@ public final class ContainerInventoryOverlay {
             int panelX, int panelY, int panelWidth, int panelHeight,
             int searchX, int searchY, int searchWidth, int controlsY,
             int categoryX, int sortX, int transferX,
-            int contentX, int contentY, int contentWidth, int contentHeight, int visibleEntryCount,
+            int contentX, int contentY, int contentWidth, int contentHeight, int visibleEntryCount, int gridColumns,
             int capacityTextY, int capacityBarY, int directionX, int manageX, int settingsX, int bottomButtonY
     ) {}
 
