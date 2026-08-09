@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -21,7 +22,9 @@ import net.neoforged.fml.loading.FMLPaths;
 /** Loads category templates from the dedicated pack/server-owned preset file. */
 public final class CategoryPresetManager {
     private static final String BUNDLED_PRESET = "/default_categories.json";
+    private static final String LEGACY_BUNDLED_PRESET = "/legacy/default_categories-0.6.2.json";
     private static volatile List<CategoryDefinition> defaults = List.of();
+    private static volatile List<CategoryDefinition> legacyDefaults = List.of();
 
     private CategoryPresetManager() {}
 
@@ -30,10 +33,11 @@ public final class CategoryPresetManager {
         try {
             Files.createDirectories(path.getParent());
             if (Files.notExists(path) || Files.size(path) == 0) {
-                try (InputStream input = CategoryPresetManager.class.getResourceAsStream(BUNDLED_PRESET)) {
-                    if (input == null) throw new IOException("Bundled category preset is missing");
-                    Files.copy(input, path, StandardCopyOption.REPLACE_EXISTING);
-                }
+                copyBundledPreset(path);
+            } else if (matchesBundledResource(path, LEGACY_BUNDLED_PRESET)) {
+                Files.copy(path, path.resolveSibling("default_categories.pre-0.6.3.json"), StandardCopyOption.REPLACE_EXISTING);
+                copyBundledPreset(path);
+                StacksNotSlots.LOGGER.info("Upgraded the unchanged bundled category presets at {}", path);
             }
             defaults = parse(Files.readString(path, StandardCharsets.UTF_8));
             StacksNotSlots.LOGGER.info("Loaded {} default category presets from {}", defaults.size(), path);
@@ -61,6 +65,20 @@ public final class CategoryPresetManager {
 
     public static void reset(PlayerCategoryData data) {
         data.replaceAll(defaults(), true);
+    }
+
+    /** Upgrades only definition-for-definition old defaults; any player edit prevents replacement. */
+    public static boolean upgradeLegacyDefaults(PlayerCategoryData data) {
+        if (legacyDefaults.isEmpty()) {
+            try { legacyDefaults = parse(readBundledResource(LEGACY_BUNDLED_PRESET)); }
+            catch (Exception exception) {
+                StacksNotSlots.LOGGER.error("Could not read legacy category presets for safe migration", exception);
+                return false;
+            }
+        }
+        if (!data.categories().equals(legacyDefaults)) return false;
+        data.replaceAll(defaults(), true);
+        return true;
     }
 
     public static Path presetPath() {
@@ -104,6 +122,10 @@ public final class CategoryPresetManager {
         ArrayList<CategoryRule> rules = new ArrayList<>();
         for (JsonElement element : array) {
             String encoded = element.getAsString();
+            if (encoded.startsWith("/")) {
+                rules.add(CategoryRule.regex(encoded));
+                continue;
+            }
             CategoryRule.Type type = encoded.startsWith("#") ? CategoryRule.Type.TAG
                     : encoded.startsWith("@") ? CategoryRule.Type.MOD_ID : CategoryRule.Type.ITEM;
             ResourceLocation target = type == CategoryRule.Type.MOD_ID
@@ -137,9 +159,26 @@ public final class CategoryPresetManager {
     }
 
     private static String readBundledPreset() throws IOException {
+        return readBundledResource(BUNDLED_PRESET);
+    }
+
+    private static String readBundledResource(String resource) throws IOException {
+        try (InputStream input = CategoryPresetManager.class.getResourceAsStream(resource)) {
+            if (input == null) throw new IOException("Bundled category resource is missing: " + resource);
+            return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
+    private static void copyBundledPreset(Path path) throws IOException {
         try (InputStream input = CategoryPresetManager.class.getResourceAsStream(BUNDLED_PRESET)) {
             if (input == null) throw new IOException("Bundled category preset is missing");
-            return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+            Files.copy(input, path, StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
+    private static boolean matchesBundledResource(Path path, String resource) throws IOException {
+        try (InputStream input = CategoryPresetManager.class.getResourceAsStream(resource)) {
+            return input != null && Arrays.equals(Files.readAllBytes(path), input.readAllBytes());
         }
     }
 }

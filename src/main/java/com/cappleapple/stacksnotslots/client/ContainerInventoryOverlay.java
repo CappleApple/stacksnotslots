@@ -80,7 +80,7 @@ public final class ContainerInventoryOverlay {
     /** Keeps server browser state in sync without depending on a screen's child-input implementation. */
     public static void initialize(ScreenEvent.Init.Post event) {
         if (!supports(event.getScreen())) return;
-        migrateLegacyHandleIconDefault();
+        restoreSpyglassHandleDefault();
         ensurePosition(event.getScreen());
         if (stateSyncedScreen != event.getScreen()) {
             stateSyncedScreen = event.getScreen();
@@ -370,7 +370,7 @@ public final class ContainerInventoryOverlay {
             int cursorX = layout.searchX() + 4 + minecraft.font.width(minecraft.font.plainSubstrByWidth(query, layout.searchWidth() - 7));
             graphics.fill(cursorX, layout.searchY() + 3, cursorX + 1, layout.searchY() + 15, 0xFFFFFFFF);
         }
-        if (inside(mouseX, mouseY, layout.searchX(), layout.searchY(),
+        if (Screen.hasShiftDown() && inside(mouseX, mouseY, layout.searchX(), layout.searchY(),
                 layout.searchWidth(), BrowserPanelLayout.CONTROL_HEIGHT)) {
             hoveredControl = "tooltip.stacksnotslots.browser_search";
         }
@@ -472,7 +472,8 @@ public final class ContainerInventoryOverlay {
                     handleX + BrowserPanelLayout.HANDLE_WIDTH / 2, handleY + 5, 0xFFFFFF);
             graphics.pose().popPose();
         }
-        if (hovered) hoveredControl = "gui.stacksnotslots.inventory_browser_drag";
+        if (hovered) hoveredControl = Screen.hasShiftDown()
+                ? "gui.stacksnotslots.inventory_browser_drag" : "gui.stacksnotslots.inventory_browser";
     }
 
     private static void renderSquare(GuiGraphics graphics, BrowserPanelLayout.ButtonBounds bounds,
@@ -685,12 +686,12 @@ public final class ContainerInventoryOverlay {
                 .map(Item::getDefaultInstance).orElse(ItemStack.EMPTY);
     }
 
-    private static void migrateLegacyHandleIconDefault() {
-        if (ClientConfig.BROWSER_HANDLE_ICON_MIGRATED.getAsBoolean()) return;
-        if ("minecraft:spyglass".equals(ClientConfig.BROWSER_HANDLE_ICON.get())) {
-            ClientConfig.BROWSER_HANDLE_ICON.set(BUILT_IN_LOGO_ICON);
+    private static void restoreSpyglassHandleDefault() {
+        if (ClientConfig.BROWSER_HANDLE_SPYGLASS_RESTORED.getAsBoolean()) return;
+        if (BUILT_IN_LOGO_ICON.equals(ClientConfig.BROWSER_HANDLE_ICON.get())) {
+            ClientConfig.BROWSER_HANDLE_ICON.set("minecraft:spyglass");
         }
-        ClientConfig.BROWSER_HANDLE_ICON_MIGRATED.set(true);
+        ClientConfig.BROWSER_HANDLE_SPYGLASS_RESTORED.set(true);
         ClientSaveState.saveClientSettings();
     }
 

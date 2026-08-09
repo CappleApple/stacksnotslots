@@ -8,6 +8,7 @@ import com.cappleapple.stacksnotslots.client.ClientTransientState;
 import com.cappleapple.stacksnotslots.client.ClientSaveState;
 import com.cappleapple.stacksnotslots.category.CategoryDefinition;
 import com.cappleapple.stacksnotslots.category.CategoryPresetManager;
+import com.cappleapple.stacksnotslots.category.CategoryRule;
 import com.cappleapple.stacksnotslots.category.PlayerCategoryData;
 import com.cappleapple.stacksnotslots.compat.InventoryProjection;
 import com.cappleapple.stacksnotslots.api.ExtractionResult;
@@ -46,6 +47,7 @@ public final class ModNetwork {
     private static final int MAX_PLAYER_CATEGORIES = 256;
     private static final int MAX_CATEGORY_RULES_PER_SIDE = 128;
     private static final int MAX_CATEGORY_NAME_LENGTH = 64;
+    private static final int MAX_CATEGORY_REGEX_LENGTH = 512;
     private static final int MAX_CLIENT_ACTIONS_PER_SECOND = 80;
     private static final Set<UUID> DIRTY_PLAYERS = ConcurrentHashMap.newKeySet();
     private static final Set<UUID> OPEN_BROWSERS = ConcurrentHashMap.newKeySet();
@@ -56,7 +58,7 @@ public final class ModNetwork {
     private ModNetwork() {}
 
     public static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar("6");
+        var registrar = event.registrar("7");
         registrar.playToClient(InventorySnapshotPayload.TYPE, InventorySnapshotPayload.STREAM_CODEC, ModNetwork::receiveSnapshot);
         registrar.playToClient(InventoryDeltaPayload.TYPE, InventoryDeltaPayload.STREAM_CODEC, ModNetwork::receiveDelta);
         registrar.playToClient(PlayerMetadataPayload.TYPE, PlayerMetadataPayload.STREAM_CODEC, ModNetwork::receiveMetadata);
@@ -187,6 +189,7 @@ public final class ModNetwork {
         }
         PlayerInventoryData data = player.getData(ModAttachments.PLAYER_DATA);
         data.loadCustomization(player.registryAccess(), payload.data());
+        CategoryPresetManager.upgradeLegacyDefaults(data.categories());
         InventoryProjection.applyExplicitView(data);
         sendMetadata(player);
         player.inventoryMenu.broadcastChanges();
@@ -303,7 +306,14 @@ public final class ModNetwork {
         return mayAdd
                 && !category.displayName().isBlank() && category.displayName().length() <= MAX_CATEGORY_NAME_LENGTH
                 && category.includes().size() <= MAX_CATEGORY_RULES_PER_SIDE && category.excludes().size() <= MAX_CATEGORY_RULES_PER_SIDE
+                && category.includes().stream().allMatch(ModNetwork::validCategoryRule)
+                && category.excludes().stream().allMatch(ModNetwork::validCategoryRule)
                 && category.pickupLimit() >= -1 && category.pickupLimit() <= Integer.MAX_VALUE;
+    }
+
+    private static boolean validCategoryRule(CategoryRule rule) {
+        return rule.type() != CategoryRule.Type.REGEX
+                || rule.expression() != null && rule.expression().length() <= MAX_CATEGORY_REGEX_LENGTH;
     }
 
     private static void bindHotbar(HotbarBindPayload payload, IPayloadContext context) {

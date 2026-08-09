@@ -56,4 +56,11 @@ class ItemSearchExpressionTest {
         assertFalse(search.valid());
         assertFalse(search.matches(DIAMOND_SWORD, () -> "anything"));
     }
+
+    @Test
+    void blockFieldIsAvailableToRegexSearches() {
+        ItemSearchExpression blocks = ItemSearchExpression.parse("/^block:");
+        assertTrue(blocks.matches(new ItemStack(Items.STONE), () -> ""));
+        assertFalse(blocks.matches(new ItemStack(Items.STICK), () -> ""));
+    }
 }

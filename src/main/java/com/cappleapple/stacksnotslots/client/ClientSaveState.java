@@ -175,6 +175,7 @@ public final class ClientSaveState {
         put(settings, "settingsIcon", ClientConfig.SETTINGS_ICON.get());
         put(settings, "browserHandleIcon", ClientConfig.BROWSER_HANDLE_ICON.get());
         put(settings, "browserHandleIconMigrated", ClientConfig.BROWSER_HANDLE_ICON_MIGRATED.getAsBoolean());
+        put(settings, "browserHandleSpyglassRestored", ClientConfig.BROWSER_HANDLE_SPYGLASS_RESTORED.getAsBoolean());
         put(settings, "browserHandleX", ClientConfig.BROWSER_HANDLE_X.getAsInt());
         put(settings, "browserHandleY", ClientConfig.BROWSER_HANDLE_Y.getAsInt());
         put(settings, "browserHandleVisible", ClientConfig.BROWSER_HANDLE_VISIBLE.getAsBoolean());
@@ -205,6 +206,7 @@ public final class ClientSaveState {
         setString(settings, "settingsIcon", ClientConfig.SETTINGS_ICON::set);
         setString(settings, "browserHandleIcon", ClientConfig.BROWSER_HANDLE_ICON::set);
         setBoolean(settings, "browserHandleIconMigrated", ClientConfig.BROWSER_HANDLE_ICON_MIGRATED::set);
+        setBoolean(settings, "browserHandleSpyglassRestored", ClientConfig.BROWSER_HANDLE_SPYGLASS_RESTORED::set);
         setInteger(settings, "browserHandleX", -1, 16384, ClientConfig.BROWSER_HANDLE_X::set);
         setInteger(settings, "browserHandleY", -1, 16384, ClientConfig.BROWSER_HANDLE_Y::set);
         setBoolean(settings, "browserHandleVisible", ClientConfig.BROWSER_HANDLE_VISIBLE::set);

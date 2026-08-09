@@ -28,6 +28,7 @@ public final class ClientConfig {
     public static final ModConfigSpec.ConfigValue<String> SETTINGS_ICON;
     public static final ModConfigSpec.ConfigValue<String> BROWSER_HANDLE_ICON;
     public static final ModConfigSpec.BooleanValue BROWSER_HANDLE_ICON_MIGRATED;
+    public static final ModConfigSpec.BooleanValue BROWSER_HANDLE_SPYGLASS_RESTORED;
     public static final ModConfigSpec.IntValue BROWSER_HANDLE_X;
     public static final ModConfigSpec.IntValue BROWSER_HANDLE_Y;
     public static final ModConfigSpec.BooleanValue BROWSER_HANDLE_VISIBLE;
@@ -57,9 +58,11 @@ public final class ClientConfig {
         OVERALL_COUNT_MODE = builder.defineEnum("browserOverallCountMode", OverallCountMode.STACKS);
         MANAGE_TABS_ICON = builder.define("manageTabsIcon", "minecraft:name_tag");
         SETTINGS_ICON = builder.define("settingsIcon", "minecraft:redstone");
-        BROWSER_HANDLE_ICON = builder.define("browserHandleIcon", "stacksnotslots:logo");
-        BROWSER_HANDLE_ICON_MIGRATED = builder.comment("Internal one-time migration from the pre-0.6.3 spyglass default")
+        BROWSER_HANDLE_ICON = builder.define("browserHandleIcon", "minecraft:spyglass");
+        BROWSER_HANDLE_ICON_MIGRATED = builder.comment("Deprecated internal migration marker retained for config compatibility")
                 .define("browserHandleIconMigrated", false);
+        BROWSER_HANDLE_SPYGLASS_RESTORED = builder.comment("Internal one-time restoration of the 0.6.3 spyglass default")
+                .define("browserHandleSpyglassRestored", false);
         // These four values remain defaults for screen types without a saved state, preserving old configs.
         BROWSER_HANDLE_X = builder.defineInRange("browserHandleX", -1, -1, 16384);
         BROWSER_HANDLE_Y = builder.defineInRange("browserHandleY", -1, -1, 16384);

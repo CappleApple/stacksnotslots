@@ -19,7 +19,7 @@ Implemented:
 - Persistent NeoForge player attachment, lossless vanilla-inventory migration, and unresolved-entry preservation
 - Over-capacity retention when attribute capacity falls
 - Chunked initial sync and revisioned delta sync
-- Player-owned category definitions, exact item/tag/mod include/exclude rules, ordering, dynamic or fixed icons, sorting, enablement, and pickup limits
+- Player-owned category definitions, exact item/tag/mod/regex include/exclude rules, item-and-block-tag matching, ordering, dynamic or fixed icons, sorting, enablement, and pickup limits
 - Separate `config/stacksnotslots/default_categories.json` preset file
 - In-game searchable category editor and reset-to-defaults operation
 - Most-restrictive overlapping world-pickup limits and rate-limited feedback
@@ -63,11 +63,11 @@ Linux/macOS:
 ./gradlew runServer
 ```
 
-The built mod is written to `build/libs/stacksnotslots-0.6.3-test.2.jar`. The project uses official Mojang mappings with Parchment parameter names and ModDevGradle's Minecraft-aware JUnit support.
+The built mod is written to `build/libs/stacksnotslots-0.6.3-test.3.jar`. The project uses official Mojang mappings with Parchment parameter names and ModDevGradle's Minecraft-aware JUnit support.
 
 ## Player usage
 
-Open the normal inventory to see the familiar vanilla layout. Click the logo handle to open the inventory browser. Drag it at least a few pixels to reposition it; its blue state shows that the browser is open. The browser can open left, right, above, or below the handle and renders above the underlying menu. Position, docking, open state, and visibility are remembered independently for each container-screen type. Control-F toggles the handle and closes an open browser. Press F to open the browser, clear its search, and begin typing a new query; while the search field is already active, F types normally.
+Open the normal inventory to see the familiar vanilla layout. Click the spyglass handle to open the inventory browser. Drag it at least a few pixels to reposition it; its blue state shows that the browser is open. The browser can open left, right, above, or below the handle and renders above the underlying menu. Position, docking, open state, and visibility are remembered independently for each container-screen type. Control-F toggles the handle and closes an open browser. Press F to open the browser, clear its search, and begin typing a new query; while the search field is already active, F types normally.
 
 - Left-click an entry to move a legal stack to the cursor.
 - Right-click an entry to move half a legal stack to the cursor.
@@ -83,7 +83,7 @@ Open the normal inventory to see the familiar vanilla layout. Click the logo han
 - Every container screen can show the same draggable browser; take any logical entry to the cursor and place it into the container normally.
 - Right-click the search field to clear it. Control-A selects the complete query so Backspace, Delete, or newly typed text can replace it.
 
-An empty search shows the selected category. A non-empty search spans every category and matches display names and full registry IDs. Prefix with `@` for mod namespaces, `#` for item tags, `^` for cached tooltip text, or `/` for a case-insensitive regular expression across names, IDs, namespaces, and tags. Use `^/pattern` for a tooltip regular expression. A closing slash is optional, so both `/pattern` and `/pattern/` work. Invalid regular expressions are shown in red and return no results. Search results retain the selected sort order. Category rules accept exact items, `#tags`, and `@modid` namespaces; tooltip and regex searches in the category editor add the selected exact item. Sort modes cover name, quantity, registry ID, and namespace; the current sort and category selection persist with player data.
+An empty search shows the selected category. A non-empty search spans every category and matches display names and full registry IDs. Prefix with `@` for mod namespaces, `#` for item or represented-block tags, `^` for cached tooltip text, or `/` for a case-insensitive regular expression across names, IDs, namespaces, and tags. Use `^/pattern` for a tooltip regular expression. A closing slash is optional, so both `/pattern` and `/pattern/` work. Invalid regular expressions are shown in red and return no results. Search results retain the selected sort order. Category rules accept exact items, `#tags`, `@modid` namespaces, and durable `/regex` predicates; `/sword` dynamically includes every matching current or future item. Regex rules also see `block:<registry-id>` for every `BlockItem`, allowing `/^block:` to select all blocks. Tooltip searches in the category editor add the selected exact item. Sort modes cover name, quantity, registry ID, and namespace; the current sort and category selection persist with player data.
 
 The browser never extends beyond the screen edge or across its handle. It reduces visible rows or columns when space is limited, while retaining at least one item row or column. Top and bottom docking use left/right control rails so the search field remains at the top and horizontal space is available to item results.
 
@@ -136,7 +136,7 @@ Client defaults/settings:
 - `browserItemCountMode` - `EXACT`, `COMPACT` (default), `STACKS`, `STACKS_REMAINDER`, or `PERCENTAGE`
 - `browserOverallCountMode` - `EXACT`, `COMPACT`, `STACKS` (default), or `PERCENTAGE`
 - `manageTabsIcon` and `settingsIcon` - configurable item IDs for the square controls
-- `browserHandleIcon` - an item ID for the draggable handle, or `stacksnotslots:logo` for the built-in logo (default)
+- `browserHandleIcon` - an item ID for the draggable handle (default `minecraft:spyglass`), or `stacksnotslots:logo` for the built-in project logo
 - `browserHandleVisible` and `browserDockSide` - defaults for container-screen types without saved state
 - `browserHandleX` and `browserHandleY` - deprecated absolute-position fields retained for config compatibility
 - `browserDefaultPlacement` - anchor used for container-screen types without saved positions; default `BOTTOM_RIGHT`, aligned beside the player hotbar
@@ -155,7 +155,7 @@ The bundled file is copied once to `config/stacksnotslots/default_categories.jso
   "name": "Ores",
   "icon": "minecraft:raw_iron",
   "order": 20,
-  "include": ["#c:ores", "minecraft:ancient_debris", "@examplemod"],
+  "include": ["#c:ores", "minecraft:ancient_debris", "@examplemod", "/raw_.*_ore"],
   "exclude": ["#example:ignored_ores"],
   "pickupLimit": -1,
   "sort": "name",
@@ -164,7 +164,7 @@ The bundled file is copied once to `config/stacksnotslots/default_categories.jso
 }
 ```
 
-Unqualified category IDs use the `stacksnotslots` namespace. Unqualified item/tag IDs use `minecraft`; `@modid` matches every item registered by that namespace. `pickupLimit: -1` means unlimited. Supported sort strings are `name`, `name_descending`, `quantity_ascending`, `quantity_descending`, `registry_id`, and `mod_namespace`.
+Unqualified category IDs use the `stacksnotslots` namespace. Unqualified item/tag IDs use `minecraft`; `@modid` matches every item registered by that namespace. A `#tag` can be an item tag or a block tag represented by a `BlockItem`. `/regex` is case-insensitive and matches item names/IDs/namespaces, item and block tags, plus the synthetic `block:<id>` field. `pickupLimit: -1` means unlimited. Supported sort strings are `name`, `name_descending`, `quantity_ascending`, `quantity_descending`, `registry_id`, and `mod_namespace`.
 
 ## Commands
 

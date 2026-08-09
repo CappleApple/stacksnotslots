@@ -1,11 +1,13 @@
 package com.cappleapple.stacksnotslots.client;
 
+import com.cappleapple.stacksnotslots.category.StackTags;
 import java.util.Locale;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 
 /** Parsed search syntax shared by the logical-inventory browser and category rule editor. */
@@ -72,13 +74,15 @@ public final class ItemSearchExpression {
             case ALL -> true;
             case PLAIN -> name.contains(term) || itemId.contains(term) || namespace.contains(term);
             case MOD -> namespace.contains(term);
-            case TAG -> stack.getTags().anyMatch(tag -> tag.location().toString().toLowerCase(Locale.ROOT).contains(term));
+            case TAG -> StackTags.locations(stack).anyMatch(tag -> tag.toString().toLowerCase(Locale.ROOT).contains(term));
             case TOOLTIP -> {
                 String tooltip = tooltipText.get().toLowerCase(Locale.ROOT);
                 yield term.isEmpty() ? !tooltip.isEmpty() : tooltip.contains(term);
             }
             case REGEX -> find(name) || find(itemId) || find(namespace)
-                    || stack.getTags().anyMatch(tag -> find(tag.location().toString()));
+                    || StackTags.locations(stack).anyMatch(tag -> find(tag.toString()))
+                    || stack.getItem() instanceof BlockItem blockItem
+                    && find("block:" + BuiltInRegistries.BLOCK.getKey(blockItem.getBlock()));
             case TOOLTIP_REGEX -> find(tooltipText.get());
         };
     }

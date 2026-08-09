@@ -1,8 +1,7 @@
 package com.cappleapple.stacksnotslots.category;
 
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.tags.TagKey;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 
 public final class CategoryMatcher {
@@ -14,11 +13,23 @@ public final class CategoryMatcher {
         return included && category.excludes().stream().noneMatch(rule -> matches(rule, stack));
     }
 
-    private static boolean matches(CategoryRule rule, ItemStack stack) {
+    public static boolean matches(CategoryRule rule, ItemStack stack) {
+        if (stack.isEmpty()) return false;
         return switch (rule.type()) {
             case ITEM -> BuiltInRegistries.ITEM.getOptional(rule.target()).map(stack::is).orElse(false);
-            case TAG -> stack.is(TagKey.create(Registries.ITEM, rule.target()));
+            case TAG -> StackTags.is(stack, rule.target());
             case MOD_ID -> BuiltInRegistries.ITEM.getKey(stack.getItem()).getNamespace().equals(rule.target().getNamespace());
+            case REGEX -> matchesRegex(rule, stack);
         };
+    }
+
+    private static boolean matchesRegex(CategoryRule rule, ItemStack stack) {
+        var itemId = BuiltInRegistries.ITEM.getKey(stack.getItem());
+        if (rule.finds(stack.getHoverName().getString()) || rule.finds(itemId.toString())
+                || rule.finds(itemId.getNamespace()) || StackTags.locations(stack).anyMatch(tag -> rule.finds(tag.toString()))) {
+            return true;
+        }
+        return stack.getItem() instanceof BlockItem blockItem
+                && rule.finds("block:" + BuiltInRegistries.BLOCK.getKey(blockItem.getBlock()));
     }
 }

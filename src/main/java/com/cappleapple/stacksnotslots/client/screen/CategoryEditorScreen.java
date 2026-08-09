@@ -5,6 +5,7 @@ import com.cappleapple.stacksnotslots.category.CategoryDefinition;
 import com.cappleapple.stacksnotslots.category.CategoryRule;
 import com.cappleapple.stacksnotslots.category.PlayerCategoryData;
 import com.cappleapple.stacksnotslots.category.SortMode;
+import com.cappleapple.stacksnotslots.category.StackTags;
 import com.cappleapple.stacksnotslots.client.ClientTooltipSearchIndex;
 import com.cappleapple.stacksnotslots.client.ItemSearchExpression;
 import com.cappleapple.stacksnotslots.data.ModAttachments;
@@ -144,6 +145,7 @@ public final class CategoryEditorScreen extends Screen {
                 case ITEM -> rule.target().toString();
                 case TAG -> "#" + rule.target();
                 case MOD_ID -> "@" + rule.target().getNamespace();
+                case REGEX -> "/" + rule.expression();
             };
             graphics.drawString(font, font.plainSubstrByWidth(label, COLUMN_WIDTH - 39), x + 22, y + 6, 0xFFFFFF, false);
             graphics.drawString(font, "×", x + COLUMN_WIDTH - 12, y + 6, 0xFF7777, false);
@@ -213,7 +215,10 @@ public final class CategoryEditorScreen extends Screen {
         ItemSearchExpression search = ItemSearchExpression.parse(raw);
         ruleSearch.setTextColor(search.valid() ? 0xE0E0E0 : 0xFF5555);
         if (!search.valid()) return;
-        if (search.mode() == ItemSearchExpression.Mode.MOD) {
+        if (search.mode() == ItemSearchExpression.Mode.REGEX) {
+            CategoryRule rule = CategoryRule.regex(raw);
+            suggestions.add(new Suggestion(rule.encoded(), rule));
+        } else if (search.mode() == ItemSearchExpression.Mode.MOD) {
             Set<String> seen = new HashSet<>();
             for (Item item : BuiltInRegistries.ITEM) {
                 String namespace = BuiltInRegistries.ITEM.getKey(item).getNamespace();
@@ -225,10 +230,9 @@ public final class CategoryEditorScreen extends Screen {
         } else if (search.mode() == ItemSearchExpression.Mode.TAG) {
             Set<ResourceLocation> seen = new HashSet<>();
             for (Item item : BuiltInRegistries.ITEM) {
-                item.getDefaultInstance().getTags().forEach(tag -> {
-                    if (seen.add(tag.location())
-                            && tag.location().toString().toLowerCase(Locale.ROOT).contains(search.term())) {
-                        suggestions.add(new Suggestion("#" + tag.location(), new CategoryRule(CategoryRule.Type.TAG, tag.location())));
+                StackTags.locations(item.getDefaultInstance()).forEach(tag -> {
+                    if (seen.add(tag) && tag.toString().toLowerCase(Locale.ROOT).contains(search.term())) {
+                        suggestions.add(new Suggestion("#" + tag, new CategoryRule(CategoryRule.Type.TAG, tag)));
                     }
                 });
             }

@@ -10,9 +10,7 @@ import java.util.List;
 import java.util.Map;
 import net.minecraft.Util;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -71,15 +69,9 @@ public final class CategoryIcons {
             return BuiltInRegistries.ITEM.getOptional(rule.target())
                     .map(Item::getDefaultInstance).filter(stack -> !stack.isEmpty()).map(List::of).orElse(List.of());
         }
-        TagKey<Item> tag = rule.type() == CategoryRule.Type.TAG ? TagKey.create(Registries.ITEM, rule.target()) : null;
         for (Item item : BuiltInRegistries.ITEM) {
             ItemStack stack = item.getDefaultInstance();
-            if (stack.isEmpty()) continue;
-            if (rule.type() == CategoryRule.Type.TAG && stack.is(tag)
-                    || rule.type() == CategoryRule.Type.MOD_ID
-                    && BuiltInRegistries.ITEM.getKey(item).getNamespace().equals(rule.target().getNamespace())) {
-                result.add(stack);
-            }
+            if (!stack.isEmpty() && CategoryMatcher.matches(rule, stack)) result.add(stack);
         }
         return List.copyOf(result);
     }

@@ -35,7 +35,8 @@ public record CategoryView(
             case ITEM -> CategoryRuleView.Type.ITEM;
             case TAG -> CategoryRuleView.Type.TAG;
             case MOD_ID -> CategoryRuleView.Type.MOD_ID;
+            case REGEX -> CategoryRuleView.Type.REGEX;
         };
-        return new CategoryRuleView(type, rule.target());
+        return new CategoryRuleView(type, rule.target(), rule.expression());
     }
 }

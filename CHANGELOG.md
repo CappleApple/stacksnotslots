@@ -8,12 +8,22 @@
 - Added explicit `^text` tooltip searches and `^/pattern` tooltip regular-expression searches.
 - Added the project logo to the NeoForge Mods screen and made it the default inventory-browser handle icon.
 - Added `SNS-SaveState.json` in the game directory for client-owned settings, per-screen browser placement, tabs, hotbar category bindings, and view preferences.
+- Added durable `/regex` category include/exclude rules. Regex rules match names, registry IDs, namespaces, item/block tags, and `block:<id>` for block items.
+- Added block-tag support for `BlockItem`s, including vanilla `minecraft:mineable/*` tags.
 
 ### Changed
 
 - Normal unprefixed searches no longer inspect tooltip text; tooltip indexing only runs for explicit `^` searches.
 - Player customization is now keyed by player UUID on the client and validated/synchronized to the server at login. Actual inventory contents and capacity remain server/world-owned.
 - Existing client TOML placement/settings and legacy world-saved tab data migrate automatically on first use.
+- Restored the spyglass as the default browser handle while retaining the project logo on the Mods screen and as a configurable handle option.
+- Updated the bundled category presets to use valid NeoForge conventional tags and dynamic regex rules. Unedited legacy defaults upgrade automatically; customized presets are preserved.
+
+### Fixed
+
+- Search syntax help now appears only while Shift is held over the search field.
+- The browser handle normally shows only `Inventory Browser`; holding Shift adds the drag hint.
+- Fixed block-only tags appearing invalid in the category editor and never matching their block items.
 
 ## 0.6.2 - 2026-08-09
 

@@ -83,12 +83,7 @@ public final class PlayerCategoryData {
     private static ListTag saveRules(List<CategoryRule> rules) {
         ListTag list = new ListTag();
         for (CategoryRule rule : rules) {
-            String encoded = switch (rule.type()) {
-                case ITEM -> rule.target().toString();
-                case TAG -> "#" + rule.target();
-                case MOD_ID -> "@" + rule.target().getNamespace();
-            };
-            list.add(StringTag.valueOf(encoded));
+            list.add(StringTag.valueOf(rule.encoded()));
         }
         return list;
     }
@@ -109,6 +104,11 @@ public final class PlayerCategoryData {
         ArrayList<CategoryRule> rules = new ArrayList<>();
         for (int i = 0; i < list.size(); i++) {
             String encoded = list.getString(i);
+            if (encoded.startsWith("/")) {
+                try { rules.add(CategoryRule.regex(encoded)); }
+                catch (IllegalArgumentException ignored) {}
+                continue;
+            }
             CategoryRule.Type type = encoded.startsWith("#") ? CategoryRule.Type.TAG
                     : encoded.startsWith("@") ? CategoryRule.Type.MOD_ID : CategoryRule.Type.ITEM;
             ResourceLocation target = type == CategoryRule.Type.MOD_ID

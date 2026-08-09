@@ -29,6 +29,7 @@ public final class ServerEvents {
         initializeCapacityBase(player, data);
         migrateVanillaInventory(player, data);
         CategoryPresetManager.initialize(data.categories());
+        CategoryPresetManager.upgradeLegacyDefaults(data.categories());
         ModNetwork.sendInitial(player);
     }
 

@@ -75,7 +75,7 @@
   "tooltip.stacksnotslots.icon": "Optional item ID or #tag used as the icon. Leave blank to cycle through included rules.",
   "tooltip.stacksnotslots.pickup_limit": "Maximum capacity this category may occupy. -1 disables this category-specific limit.",
   "tooltip.stacksnotslots.sort": "Default order applied to the visible main grid when this category is clicked.",
-  "tooltip.stacksnotslots.rule_search": "Search item names/IDs; use #tag, @mod, ^tooltip text, or /regex. Regex and tooltip results add the selected exact item. Combine them as ^/regex for tooltip regex.",
+  "tooltip.stacksnotslots.rule_search": "Search item names/IDs; use #tag, @mod, ^tooltip text, or /regex. Regex adds one dynamic rule; tooltip searches add the selected exact item. Combine ^ and / for tooltip regex.",
   "tooltip.stacksnotslots.browser_search": "Search names/IDs; use #tag, @mod, ^tooltip text, /regex, or ^/tooltip regex. A closing regex slash is optional.",
   "tooltip.stacksnotslots.edit_mode": "Choose whether search results add include or exclude rules.",
   "tooltip.stacksnotslots.browser_view": "LIST shows named rows; GRID shows compact item cells. Choices: LIST or GRID (default).",

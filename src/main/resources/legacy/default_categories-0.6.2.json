@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "presets": [
+    { "id": "all", "name": "All", "icon": "minecraft:chest", "order": 0, "include": [], "exclude": [], "pickupLimit": -1, "sort": "name", "allItems": true },
+    { "id": "blocks", "name": "Blocks", "icon": "minecraft:stone", "order": 10, "include": ["#c:blocks", "#minecraft:mineable/pickaxe", "#minecraft:mineable/axe", "#minecraft:mineable/shovel"], "exclude": [], "pickupLimit": -1, "sort": "name" },
+    { "id": "ores", "name": "Ores", "icon": "minecraft:raw_iron", "order": 20, "include": ["#c:ores"], "exclude": [], "pickupLimit": -1, "sort": "name" },
+    { "id": "raw_materials", "name": "Raw Materials", "icon": "minecraft:raw_gold", "order": 30, "include": ["#c:raw_materials"], "exclude": [], "pickupLimit": -1, "sort": "name" },
+    { "id": "materials", "name": "Ingots / Materials", "icon": "minecraft:iron_ingot", "order": 40, "include": ["#c:ingots", "#c:gems", "#c:dusts"], "exclude": [], "pickupLimit": -1, "sort": "name" },
+    { "id": "mob_drops", "name": "Mob Drops", "icon": "minecraft:rotten_flesh", "order": 50, "include": ["#c:mob_drops"], "exclude": [], "pickupLimit": -1, "sort": "quantity_descending" },
+    { "id": "food", "name": "Food", "icon": "minecraft:apple", "order": 60, "include": ["#c:foods"], "exclude": [], "pickupLimit": -1, "sort": "name" },
+    { "id": "tools", "name": "Tools", "icon": "minecraft:iron_pickaxe", "order": 70, "include": ["#c:tools"], "exclude": [], "pickupLimit": -1, "sort": "name" },
+    { "id": "weapons", "name": "Weapons", "icon": "minecraft:iron_sword", "order": 80, "include": ["#c:weapons"], "exclude": [], "pickupLimit": -1, "sort": "name" },
+    { "id": "armor", "name": "Armor", "icon": "minecraft:iron_chestplate", "order": 90, "include": ["#c:armors"], "exclude": [], "pickupLimit": -1, "sort": "name" },
+    { "id": "redstone", "name": "Redstone", "icon": "minecraft:redstone", "order": 100, "include": ["#c:redstone_dusts", "#minecraft:redstone_ores"], "exclude": [], "pickupLimit": -1, "sort": "name" },
+    { "id": "enchanted_books", "name": "Enchanted Books", "icon": "minecraft:enchanted_book", "order": 110, "include": ["minecraft:enchanted_book"], "exclude": [], "pickupLimit": -1, "sort": "name" },
+    { "id": "potions", "name": "Potions", "icon": "minecraft:potion", "order": 120, "include": ["minecraft:potion", "minecraft:splash_potion", "minecraft:lingering_potion"], "exclude": [], "pickupLimit": -1, "sort": "name" },
+    { "id": "miscellaneous", "name": "Miscellaneous", "icon": "minecraft:bundle", "order": 130, "include": [], "exclude": ["#c:blocks", "#minecraft:mineable/pickaxe", "#minecraft:mineable/axe", "#minecraft:mineable/shovel", "#c:ores", "#c:raw_materials", "#c:ingots", "#c:gems", "#c:dusts", "#c:mob_drops", "#c:foods", "#c:tools", "#c:weapons", "#c:armors", "#c:redstone_dusts", "#minecraft:redstone_ores", "minecraft:enchanted_book", "minecraft:potion", "minecraft:splash_potion", "minecraft:lingering_potion"], "pickupLimit": -1, "sort": "name", "allItems": true }
+  ]
+}
