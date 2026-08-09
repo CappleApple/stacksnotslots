@@ -1,9 +1,11 @@
 package com.cappleapple.stacksnotslots.network;
 
+import com.cappleapple.stacksnotslots.StacksNotSlots;
 import com.cappleapple.stacksnotslots.data.ModAttachments;
 import com.cappleapple.stacksnotslots.data.PlayerInventoryData;
 import com.cappleapple.stacksnotslots.inventory.DynamicCapacityInventory;
 import com.cappleapple.stacksnotslots.client.ClientTransientState;
+import com.cappleapple.stacksnotslots.client.ClientSaveState;
 import com.cappleapple.stacksnotslots.category.CategoryDefinition;
 import com.cappleapple.stacksnotslots.category.CategoryPresetManager;
 import com.cappleapple.stacksnotslots.category.PlayerCategoryData;
@@ -11,10 +13,14 @@ import com.cappleapple.stacksnotslots.compat.InventoryProjection;
 import com.cappleapple.stacksnotslots.api.ExtractionResult;
 import com.cappleapple.stacksnotslots.hotbar.BindingType;
 import com.cappleapple.stacksnotslots.hotbar.HotbarBinding;
+import com.cappleapple.stacksnotslots.hotbar.HotbarBindings;
 import com.cappleapple.stacksnotslots.config.ClientConfig;
+import com.cappleapple.stacksnotslots.category.SortMode;
 import com.cappleapple.stacksnotslots.inventory.InventoryTransactions;
 import com.cappleapple.stacksnotslots.inventory.ContainerTransfers;
 import net.minecraft.network.chat.Component;
+import net.minecraft.nbt.Tag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvents;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -50,10 +56,11 @@ public final class ModNetwork {
     private ModNetwork() {}
 
     public static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar("5");
+        var registrar = event.registrar("6");
         registrar.playToClient(InventorySnapshotPayload.TYPE, InventorySnapshotPayload.STREAM_CODEC, ModNetwork::receiveSnapshot);
         registrar.playToClient(InventoryDeltaPayload.TYPE, InventoryDeltaPayload.STREAM_CODEC, ModNetwork::receiveDelta);
         registrar.playToClient(PlayerMetadataPayload.TYPE, PlayerMetadataPayload.STREAM_CODEC, ModNetwork::receiveMetadata);
+        registrar.playToServer(PlayerCustomizationPayload.TYPE, PlayerCustomizationPayload.STREAM_CODEC, ModNetwork::updatePlayerCustomization);
         registrar.playToServer(RequestFullSyncPayload.TYPE, RequestFullSyncPayload.STREAM_CODEC, ModNetwork::requestFullSync);
         registrar.playToServer(InventoryActionPayload.TYPE, InventoryActionPayload.STREAM_CODEC, ModNetwork::inventoryAction);
         registrar.playToServer(HotbarCyclePayload.TYPE, HotbarCyclePayload.STREAM_CODEC, ModNetwork::cycleHotbar);
@@ -166,7 +173,56 @@ public final class ModNetwork {
     }
 
     private static void receiveMetadata(PlayerMetadataPayload payload, IPayloadContext context) {
-        context.player().getData(ModAttachments.PLAYER_DATA).loadMetadata(context.player().registryAccess(), payload.data());
+        PlayerInventoryData data = context.player().getData(ModAttachments.PLAYER_DATA);
+        data.loadMetadata(context.player().registryAccess(), payload.data());
+        ClientSaveState.receiveMetadata(context.player(), data);
+    }
+
+    private static void updatePlayerCustomization(PlayerCustomizationPayload payload, IPayloadContext context) {
+        if (!(context.player() instanceof ServerPlayer player) || !allowAction(player)) return;
+        if (!validCustomization(payload.data(), player)) {
+            StacksNotSlots.LOGGER.warn("Rejected invalid client customization from {}", player.getGameProfile().getName());
+            sendMetadata(player);
+            return;
+        }
+        PlayerInventoryData data = player.getData(ModAttachments.PLAYER_DATA);
+        data.loadCustomization(player.registryAccess(), payload.data());
+        InventoryProjection.applyExplicitView(data);
+        sendMetadata(player);
+        player.inventoryMenu.broadcastChanges();
+    }
+
+    private static boolean validCustomization(net.minecraft.nbt.CompoundTag root, ServerPlayer player) {
+        var categoryTag = root.getCompound("Categories");
+        int encodedCategoryCount = categoryTag.getList("Categories", Tag.TAG_COMPOUND).size();
+        if (encodedCategoryCount > MAX_PLAYER_CATEGORIES) return false;
+
+        PlayerCategoryData categories = new PlayerCategoryData();
+        categories.load(categoryTag);
+        if (categories.categories().size() != encodedCategoryCount) return false;
+        java.util.HashSet<ResourceLocation> categoryIds = new java.util.HashSet<>();
+        for (CategoryDefinition category : categories.categories()) {
+            if (!categoryIds.add(category.id()) || !validCategory(category, categories)) return false;
+        }
+
+        HotbarBindings hotbar = new HotbarBindings();
+        var hotbarTag = root.getCompound("Hotbar");
+        if (hotbarTag.getList("Bindings", Tag.TAG_COMPOUND).size() > HotbarBindings.SLOT_COUNT) return false;
+        hotbar.load(player.registryAccess(), hotbarTag);
+        for (int slot = 0; slot < HotbarBindings.SLOT_COUNT; slot++) {
+            HotbarBinding binding = hotbar.get(slot);
+            if (binding.type() == BindingType.CATEGORY && categories.find(binding.target()) == null) return false;
+        }
+
+        try {
+            SortMode.valueOf(root.getString("InventorySortPreference"));
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
+        String selectedValue = root.getString("SelectedCategoryPreference");
+        ResourceLocation selected = selectedValue.isBlank() ? null : ResourceLocation.tryParse(selectedValue);
+        if (!selectedValue.isBlank() && (selected == null || categories.find(selected) == null)) return false;
+        return true;
     }
 
     private static void requestFullSync(RequestFullSyncPayload payload, IPayloadContext context) {

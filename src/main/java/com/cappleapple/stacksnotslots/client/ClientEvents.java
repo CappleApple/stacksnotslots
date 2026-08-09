@@ -13,12 +13,23 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 public final class ClientEvents {
     private ClientEvents() {}
+
+    @SubscribeEvent
+    public static void playerLoggingIn(ClientPlayerNetworkEvent.LoggingIn event) {
+        ClientSaveState.beginConnection(event.getPlayer());
+    }
+
+    @SubscribeEvent
+    public static void playerLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
+        ClientSaveState.endConnection();
+    }
 
     @SubscribeEvent
     public static void openingScreen(ScreenEvent.Opening event) {

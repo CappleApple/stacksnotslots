@@ -11,6 +11,7 @@ import com.cappleapple.stacksnotslots.inventory.ContainerTransfers;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.item.ItemStack;
@@ -131,6 +132,24 @@ class InventoryPayloadCodecTest {
             assertEquals(BulkTransferPayload.Direction.TO_CONTAINER, result.direction());
             assertSame(Items.STONE, result.stacks().getFirst().prototype().getItem());
             assertEquals(130, result.stacks().getFirst().quantity());
+        } finally {
+            buffer.release();
+        }
+    }
+
+    @Test
+    void playerCustomizationRoundTripsAsADefensiveNbtCopy() {
+        CompoundTag customization = new CompoundTag();
+        customization.putString("InventorySortPreference", "NAME_ASCENDING");
+        PlayerCustomizationPayload payload = new PlayerCustomizationPayload(customization);
+        customization.putString("InventorySortPreference", "REGISTRY_ID");
+
+        RegistryFriendlyByteBuf buffer = createBuffer();
+        try {
+            PlayerCustomizationPayload.STREAM_CODEC.encode(buffer, payload);
+            buffer.readerIndex(0);
+            PlayerCustomizationPayload decoded = PlayerCustomizationPayload.STREAM_CODEC.decode(buffer);
+            assertEquals("NAME_ASCENDING", decoded.data().getString("InventorySortPreference"));
         } finally {
             buffer.release();
         }

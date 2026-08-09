@@ -79,6 +79,15 @@ public final class HotbarBindings {
     }
 
     public CompoundTag save(HolderLookup.Provider provider) {
+        return save(provider, true);
+    }
+
+    /** Saves only durable category assignments; the currently cycled item is runtime state. */
+    public CompoundTag saveClientState(HolderLookup.Provider provider) {
+        return save(provider, false);
+    }
+
+    private CompoundTag save(HolderLookup.Provider provider, boolean includeSelectedEntry) {
         CompoundTag root = new CompoundTag();
         ListTag list = new ListTag();
         for (int slot = 0; slot < bindings.length; slot++) {
@@ -87,7 +96,9 @@ public final class HotbarBindings {
             tag.putByte("Slot", (byte)slot);
             tag.putString("Type", binding.type().name());
             if (binding.target() != null) tag.putString("Target", binding.target().toString());
-            if (binding.selectedEntry() != null) tag.put("SelectedEntry", binding.selectedEntry().save(provider));
+            if (includeSelectedEntry && binding.selectedEntry() != null) {
+                tag.put("SelectedEntry", binding.selectedEntry().save(provider));
+            }
             list.add(tag);
         }
         root.put("Bindings", list);

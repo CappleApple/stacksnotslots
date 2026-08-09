@@ -691,7 +691,7 @@ public final class ContainerInventoryOverlay {
             ClientConfig.BROWSER_HANDLE_ICON.set(BUILT_IN_LOGO_ICON);
         }
         ClientConfig.BROWSER_HANDLE_ICON_MIGRATED.set(true);
-        ClientConfig.SPEC.save();
+        ClientSaveState.saveClientSettings();
     }
 
     private static String shortSortName(SortMode mode) {

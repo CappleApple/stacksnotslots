@@ -7,10 +7,13 @@
 - Added `/pattern` regular-expression searches to the inventory browser and category rule editor.
 - Added explicit `^text` tooltip searches and `^/pattern` tooltip regular-expression searches.
 - Added the project logo to the NeoForge Mods screen and made it the default inventory-browser handle icon.
+- Added `SNS-SaveState.json` in the game directory for client-owned settings, per-screen browser placement, tabs, hotbar category bindings, and view preferences.
 
 ### Changed
 
 - Normal unprefixed searches no longer inspect tooltip text; tooltip indexing only runs for explicit `^` searches.
+- Player customization is now keyed by player UUID on the client and validated/synchronized to the server at login. Actual inventory contents and capacity remain server/world-owned.
+- Existing client TOML placement/settings and legacy world-saved tab data migrate automatically on first use.
 
 ## 0.6.2 - 2026-08-09
 

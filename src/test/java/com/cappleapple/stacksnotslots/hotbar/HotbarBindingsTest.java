@@ -1,6 +1,7 @@
 package com.cappleapple.stacksnotslots.hotbar;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.cappleapple.stacksnotslots.category.CategoryDefinition;
@@ -81,6 +82,11 @@ class HotbarBindingsTest {
         loaded.load(access, hotbar.save(access));
         assertTrue(loaded.get(0).selectedEntry().matches(cycled));
         assertEquals(BindingType.CATEGORY, loaded.get(0).type());
+
+        HotbarBindings clientLoaded = new HotbarBindings();
+        clientLoaded.load(access, hotbar.saveClientState(access));
+        assertEquals(BindingType.CATEGORY, clientLoaded.get(0).type());
+        assertNull(clientLoaded.get(0).selectedEntry());
     }
 
     private static PlayerCategoryData buildingCategories() {

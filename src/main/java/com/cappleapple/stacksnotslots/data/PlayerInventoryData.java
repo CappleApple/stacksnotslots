@@ -46,22 +46,32 @@ public final class PlayerInventoryData implements INBTSerializable<CompoundTag> 
     public boolean pickupIntoHotbar() { return pickupIntoHotbar; }
     public void setPickupIntoHotbar(boolean value) { pickupIntoHotbar = value; }
 
-    public CompoundTag saveMetadata(HolderLookup.Provider provider) {
+    /** Client-owned category, hotbar, and inventory-view customization. */
+    public CompoundTag saveCustomization(HolderLookup.Provider provider) {
         CompoundTag root = new CompoundTag();
         root.put("Categories", categories.save());
-        root.put("Hotbar", hotbar.save(provider));
-        root.putBoolean("MigratedVanillaInventory", migratedVanillaInventory);
-        root.putBoolean("InitializedCapacityBase", initializedCapacityBase);
+        root.put("Hotbar", hotbar.saveClientState(provider));
         root.putString("InventorySortPreference", inventorySortPreference.name());
         if (selectedCategoryPreference != null) root.putString("SelectedCategoryPreference", selectedCategoryPreference.toString());
         root.putBoolean("PickupIntoHotbar", pickupIntoHotbar);
         return root;
     }
 
-    public void loadMetadata(HolderLookup.Provider provider, CompoundTag root) {
+    public void loadCustomization(HolderLookup.Provider provider, CompoundTag root) {
         categories.load(root.getCompound("Categories"));
         hotbar.load(provider, root.getCompound("Hotbar"));
         loadUiPreferences(root);
+    }
+
+    public CompoundTag saveMetadata(HolderLookup.Provider provider) {
+        CompoundTag root = saveCustomization(provider);
+        root.putBoolean("MigratedVanillaInventory", migratedVanillaInventory);
+        root.putBoolean("InitializedCapacityBase", initializedCapacityBase);
+        return root;
+    }
+
+    public void loadMetadata(HolderLookup.Provider provider, CompoundTag root) {
+        loadCustomization(provider, root);
     }
 
     public long effectiveCapacity() {
@@ -89,24 +99,18 @@ public final class PlayerInventoryData implements INBTSerializable<CompoundTag> 
     public CompoundTag serializeNBT(HolderLookup.Provider provider) {
         CompoundTag root = new CompoundTag();
         root.put("Inventory", inventory.serializeNBT(provider));
-        root.put("Categories", categories.save());
-        root.put("Hotbar", hotbar.save(provider));
         root.putBoolean("MigratedVanillaInventory", migratedVanillaInventory);
         root.putBoolean("InitializedCapacityBase", initializedCapacityBase);
-        root.putString("InventorySortPreference", inventorySortPreference.name());
-        if (selectedCategoryPreference != null) root.putString("SelectedCategoryPreference", selectedCategoryPreference.toString());
-        root.putBoolean("PickupIntoHotbar", pickupIntoHotbar);
         return root;
     }
 
     @Override
     public void deserializeNBT(HolderLookup.Provider provider, CompoundTag root) {
         inventory.deserializeNBT(provider, root.getCompound("Inventory"));
-        categories.load(root.getCompound("Categories"));
-        hotbar.load(provider, root.getCompound("Hotbar"));
+        // Import pre-0.6.3 customization once so the client can migrate it into SNS-SaveState.json.
+        if (root.contains("Categories") || root.contains("Hotbar")) loadCustomization(provider, root);
         migratedVanillaInventory = root.getBoolean("MigratedVanillaInventory");
         initializedCapacityBase = root.getBoolean("InitializedCapacityBase");
-        loadUiPreferences(root);
         syncVanillaCompatibilityView();
     }
 

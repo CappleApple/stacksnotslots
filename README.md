@@ -63,11 +63,11 @@ Linux/macOS:
 ./gradlew runServer
 ```
 
-The built mod is written to `build/libs/stacksnotslots-0.6.3-test.1.jar`. The project uses official Mojang mappings with Parchment parameter names and ModDevGradle's Minecraft-aware JUnit support.
+The built mod is written to `build/libs/stacksnotslots-0.6.3-test.2.jar`. The project uses official Mojang mappings with Parchment parameter names and ModDevGradle's Minecraft-aware JUnit support.
 
 ## Player usage
 
-Open the normal inventory to see the familiar vanilla layout. Click the spyglass handle to open the inventory browser. Drag it at least a few pixels to reposition it; its blue state shows that the browser is open. The browser can open left, right, above, or below the handle and renders above the underlying menu. Position, docking, open state, and visibility are remembered independently for each container-screen type. Control-F toggles the handle and closes an open browser. Press F to open the browser, clear its search, and begin typing a new query; while the search field is already active, F types normally.
+Open the normal inventory to see the familiar vanilla layout. Click the logo handle to open the inventory browser. Drag it at least a few pixels to reposition it; its blue state shows that the browser is open. The browser can open left, right, above, or below the handle and renders above the underlying menu. Position, docking, open state, and visibility are remembered independently for each container-screen type. Control-F toggles the handle and closes an open browser. Press F to open the browser, clear its search, and begin typing a new query; while the search field is already active, F types normally.
 
 - Left-click an entry to move a legal stack to the cursor.
 - Right-click an entry to move half a legal stack to the cursor.
@@ -111,7 +111,7 @@ Categories are predicates over the unified collection; they never own items or r
 
 Exclusions win. An item may appear in multiple categories. During world pickup, every matching enabled finite limit must allow the accepted amount, so the most restrictive remaining allowance wins. Manual container transfers do not use category limits by default, while global capacity always applies.
 
-Player customizations are persisted per player and are not overwritten when server defaults change. **Reset to Defaults** is explicit.
+Player customizations are persisted by UUID in the client-owned `SNS-SaveState.json` and are not overwritten when server defaults change. **Reset to Defaults** is explicit.
 
 ## Configuration
 
@@ -123,7 +123,9 @@ Player customizations are persisted per player and are not overwritten when serv
 - `categories.categoryLimitsAffectWorldPickup` - default `true`
 - `categories.categoryLimitsAffectManualTransfers` - default `false`
 
-`config/stacksnotslots-client.toml`:
+`config/stacksnotslots-client.toml` supplies initial/default values. Once the client runs, user changes are written to `SNS-SaveState.json` in the game directory instead, along with per-screen browser placement and UUID-keyed tab/hotbar/view preferences. This keeps player customizations outside the config directory used by modpack updates.
+
+Client defaults/settings:
 
 - `capacityDisplayMode` - `CAPACITY`, `STACK_EQUIVALENTS`, or `BOTH`
 - `pickupLimitNotification` - `NONE`, `HUD`, `ACTION_BAR`, `SOUND`, or `HUD_AND_SOUND`
@@ -138,7 +140,7 @@ Player customizations are persisted per player and are not overwritten when serv
 - `browserHandleVisible` and `browserDockSide` - defaults for container-screen types without saved state
 - `browserHandleX` and `browserHandleY` - deprecated absolute-position fields retained for config compatibility
 - `browserDefaultPlacement` - anchor used for container-screen types without saved positions; default `BOTTOM_RIGHT`, aligned beside the player hotbar
-- `browserScreenStates` - internal per-screen-type GUI-relative placement, docking, open, and visibility state
+- Per-screen GUI-relative placement, docking, open, and visibility state is stored in `SNS-SaveState.json`
 - `autoChooseBrowserSide` - optional side selection while dragging
 - `autoSideDeadZoneX` / `autoSideDeadZoneY` - center-screen dead-zone half sizes for automatic docking
 - `showBulkTransferOverlay` / `bulkTransferOverlaySeconds` - in-world bulk-transfer feedback and duration

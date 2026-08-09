@@ -1,8 +1,6 @@
 package com.cappleapple.stacksnotslots.client;
 
 import com.cappleapple.stacksnotslots.config.ClientConfig;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
 
 /** Persists one GUI-relative floating-browser state for each concrete container-screen class. */
@@ -26,29 +24,16 @@ final class BrowserScreenStateStore {
     private BrowserScreenStateStore() {}
 
     static State load(String screenType) {
-        List<? extends String> savedStates = ClientConfig.BROWSER_SCREEN_STATES.get();
-        for (String encoded : savedStates) {
-            Optional<State> decoded = decode(encoded);
-            if (decoded.isPresent() && decoded.get().screenType().equals(screenType)) return decoded.get();
-        }
-        return new State(screenType,
+        return ClientSaveState.browserState(screenType).orElseGet(() -> new State(screenType,
                 UNSET_POSITION,
                 UNSET_POSITION,
                 false,
                 ClientConfig.BROWSER_HANDLE_VISIBLE.getAsBoolean(),
-                ClientConfig.BROWSER_DOCK_SIDE.get());
+                ClientConfig.BROWSER_DOCK_SIDE.get()));
     }
 
     static void save(State state) {
-        List<String> updated = new ArrayList<>();
-        for (String encoded : ClientConfig.BROWSER_SCREEN_STATES.get()) {
-            Optional<State> decoded = decode(encoded);
-            if (decoded.isPresent() && !decoded.get().screenType().equals(state.screenType())) updated.add(encoded);
-            else if (decoded.isEmpty() && !isLegacyAbsoluteState(encoded)) updated.add(encoded);
-        }
-        updated.add(encode(state));
-        ClientConfig.BROWSER_SCREEN_STATES.set(List.copyOf(updated));
-        ClientConfig.SPEC.save();
+        ClientSaveState.saveBrowserState(state);
     }
 
     static String encode(State state) {
@@ -69,9 +54,5 @@ final class BrowserScreenStateStore {
         } catch (IllegalArgumentException ignored) {
             return Optional.empty();
         }
-    }
-
-    private static boolean isLegacyAbsoluteState(String encoded) {
-        return encoded.startsWith("v1|") || encoded.startsWith("v2|");
     }
 }

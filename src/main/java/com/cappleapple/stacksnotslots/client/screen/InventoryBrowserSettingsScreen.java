@@ -1,5 +1,6 @@
 package com.cappleapple.stacksnotslots.client.screen;
 
+import com.cappleapple.stacksnotslots.client.ClientSaveState;
 import com.cappleapple.stacksnotslots.config.ClientConfig;
 import java.util.Locale;
 import net.minecraft.client.gui.GuiGraphics;
@@ -136,7 +137,7 @@ public final class InventoryBrowserSettingsScreen extends Screen {
         ClientConfig.BROWSER_HANDLE_ICON.set(handleIcon.getValue().trim());
         ClientConfig.MANAGE_TABS_ICON.set(manageIcon.getValue().trim());
         ClientConfig.SETTINGS_ICON.set(settingsIcon.getValue().trim());
-        ClientConfig.SPEC.save();
+        ClientSaveState.saveClientSettings();
         onClose();
     }
 

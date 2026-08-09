@@ -58,6 +58,7 @@ public final class ServerEvents {
         PlayerInventoryData original = event.getOriginal().getData(ModAttachments.PLAYER_DATA);
         PlayerInventoryData replacement = event.getEntity().getData(ModAttachments.PLAYER_DATA);
         replacement.deserializeNBT(event.getEntity().registryAccess(), original.serializeNBT(event.getOriginal().registryAccess()));
+        replacement.loadCustomization(event.getEntity().registryAccess(), original.saveCustomization(event.getOriginal().registryAccess()));
     }
 
     private static void initializeCapacityBase(ServerPlayer player, PlayerInventoryData data) {

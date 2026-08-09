@@ -2,6 +2,7 @@ package com.cappleapple.stacksnotslots.client.screen;
 
 import com.cappleapple.stacksnotslots.category.CategoryDefinition;
 import com.cappleapple.stacksnotslots.client.ContainerInventoryOverlay;
+import com.cappleapple.stacksnotslots.client.ClientSaveState;
 import com.cappleapple.stacksnotslots.config.ClientConfig;
 import com.cappleapple.stacksnotslots.data.ModAttachments;
 import com.cappleapple.stacksnotslots.network.InventoryViewPreferencesPayload;
@@ -106,7 +107,7 @@ public final class CapacityInventoryScreen extends InventoryScreen {
         } else {
             ClientConfig.CATEGORY_SELECTOR_X.set(selectorX - leftPos);
             ClientConfig.CATEGORY_SELECTOR_Y.set(selectorY - topPos);
-            ClientConfig.SPEC.save();
+            ClientSaveState.saveClientSettings();
         }
         return true;
     }
