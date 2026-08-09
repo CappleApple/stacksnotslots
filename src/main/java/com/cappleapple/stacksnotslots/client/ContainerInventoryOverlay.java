@@ -47,6 +47,8 @@ public final class ContainerInventoryOverlay {
     private static Screen lastScreen;
     private static Screen stateSyncedScreen;
     private static String activeScreenType;
+    private static int anchoredGuiLeft;
+    private static int anchoredGuiTop;
     private static int handleX;
     private static int handleY;
     private static boolean open;
@@ -77,7 +79,7 @@ public final class ContainerInventoryOverlay {
     private ContainerInventoryOverlay() {}
 
     /** Keeps server browser state in sync without depending on a screen's child-input implementation. */
-    public static void initialize(ScreenEvent.Init.Pre event) {
+    public static void initialize(ScreenEvent.Init.Post event) {
         if (!supports(event.getScreen())) return;
         ensurePosition(event.getScreen());
         if (stateSyncedScreen != event.getScreen()) {
@@ -716,25 +718,38 @@ public final class ContainerInventoryOverlay {
     }
 
     private static void ensurePosition(Screen screen) {
+        AbstractContainerScreen<?> container = (AbstractContainerScreen<?>)screen;
+        int guiLeft = container.getGuiLeft();
+        int guiTop = container.getGuiTop();
         if (lastScreen != screen) {
             clearPointerCapture();
             lastScreen = screen;
-            activeScreenType = screenStateKey((AbstractContainerScreen<?>)screen);
+            activeScreenType = screenStateKey(container);
             BrowserScreenStateStore.State state = BrowserScreenStateStore.load(activeScreenType);
-            handleX = state.x();
-            handleY = state.y();
+            anchoredGuiLeft = guiLeft;
+            anchoredGuiTop = guiTop;
             open = state.open();
             visible = state.visible();
             dockSide = state.dockSide();
             searchFocused = false;
             SEARCH.clearSelection();
-            if ((handleX < 0 || handleY < 0) && screen instanceof AbstractContainerScreen<?> container) {
+            if (state.hasPosition()) {
+                handleX = guiLeft + state.offsetX();
+                handleY = guiTop + state.offsetY();
+            } else {
                 BrowserDefaultPosition defaultPosition = BrowserDefaultPosition.resolve(
-                        container.getGuiLeft(), container.getGuiTop(), container.getXSize(), container.getYSize(),
+                        guiLeft, guiTop, container.getXSize(), container.getYSize(),
                         ClientConfig.BROWSER_DEFAULT_PLACEMENT.get());
                 handleX = defaultPosition.x();
                 handleY = defaultPosition.y();
             }
+            constrainHandle(screen);
+        } else if (guiLeft != anchoredGuiLeft || guiTop != anchoredGuiTop) {
+            // Keep the handle attached to the same local GUI position when a mod or resize moves the menu.
+            handleX += guiLeft - anchoredGuiLeft;
+            handleY += guiTop - anchoredGuiTop;
+            anchoredGuiLeft = guiLeft;
+            anchoredGuiTop = guiTop;
             constrainHandle(screen);
         }
     }
@@ -748,8 +763,10 @@ public final class ContainerInventoryOverlay {
 
     private static void persistScreenState(Screen screen) {
         if (!supports(screen) || activeScreenType == null) return;
+        AbstractContainerScreen<?> container = (AbstractContainerScreen<?>)screen;
         BrowserScreenStateStore.save(new BrowserScreenStateStore.State(
-                activeScreenType, handleX, handleY, open, visible, dockSide));
+                activeScreenType, handleX - container.getGuiLeft(), handleY - container.getGuiTop(),
+                open, visible, dockSide));
     }
 
     /** Class identity and dimensions distinguish UI types without assuming every menu exposes a constructible type. */

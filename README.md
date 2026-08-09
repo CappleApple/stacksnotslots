@@ -63,7 +63,7 @@ Linux/macOS:
 ./gradlew runServer
 ```
 
-The built mod is written to `build/libs/stacksnotslots-0.6.2-test.2.jar`. The project uses official Mojang mappings with Parchment parameter names and ModDevGradle's Minecraft-aware JUnit support.
+The built mod is written to `build/libs/stacksnotslots-0.6.2-test.3.jar`. The project uses official Mojang mappings with Parchment parameter names and ModDevGradle's Minecraft-aware JUnit support.
 
 ## Player usage
 
@@ -135,9 +135,9 @@ Player customizations are persisted per player and are not overwritten when serv
 - `browserOverallCountMode` - `EXACT`, `COMPACT`, `STACKS` (default), or `PERCENTAGE`
 - `manageTabsIcon`, `settingsIcon`, and `browserHandleIcon` - configurable item IDs for the square controls and draggable handle
 - `browserHandleVisible` and `browserDockSide` - defaults for container-screen types without saved state
-- `browserHandleX` and `browserHandleY` - legacy pre-0.6.1 position fallback used while migrating an existing config
+- `browserHandleX` and `browserHandleY` - deprecated absolute-position fields retained for config compatibility
 - `browserDefaultPlacement` - anchor used for container-screen types without saved positions; default `BOTTOM_RIGHT`, aligned beside the player hotbar
-- `browserScreenStates` - internal per-screen-type placement, docking, open, and visibility state
+- `browserScreenStates` - internal per-screen-type GUI-relative placement, docking, open, and visibility state
 - `autoChooseBrowserSide` - optional side selection while dragging
 - `autoSideDeadZoneX` / `autoSideDeadZoneY` - center-screen dead-zone half sizes for automatic docking
 - `showBulkTransferOverlay` / `bulkTransferOverlaySeconds` - in-world bulk-transfer feedback and duration

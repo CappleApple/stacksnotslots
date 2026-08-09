@@ -111,8 +111,8 @@ public final class ClientEvents {
         renderCycleOverlay(event.getGuiGraphics());
     }
 
-    @SubscribeEvent(priority = EventPriority.HIGHEST)
-    public static void initializeContainerOverlay(ScreenEvent.Init.Pre event) {
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public static void initializeContainerOverlay(ScreenEvent.Init.Post event) {
         ContainerInventoryOverlay.initialize(event);
     }
 

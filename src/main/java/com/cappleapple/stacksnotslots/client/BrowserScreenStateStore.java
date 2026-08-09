@@ -5,19 +5,23 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/** Persists one floating-browser state for each concrete container-screen class. */
+/** Persists one GUI-relative floating-browser state for each concrete container-screen class. */
 final class BrowserScreenStateStore {
-    private static final String VERSION = "v2";
-    private static final String LEGACY_VERSION_PREFIX = "v1|";
+    static final int UNSET_POSITION = Integer.MIN_VALUE;
+    private static final String VERSION = "v3";
 
     record State(
             String screenType,
-            int x,
-            int y,
+            int offsetX,
+            int offsetY,
             boolean open,
             boolean visible,
             ClientConfig.BrowserDockSide dockSide
-    ) {}
+    ) {
+        boolean hasPosition() {
+            return offsetX != UNSET_POSITION && offsetY != UNSET_POSITION;
+        }
+    }
 
     private BrowserScreenStateStore() {}
 
@@ -27,13 +31,9 @@ final class BrowserScreenStateStore {
             Optional<State> decoded = decode(encoded);
             if (decoded.isPresent() && decoded.get().screenType().equals(screenType)) return decoded.get();
         }
-        // v1 coordinates predate configurable anchors. Ignoring them once lets upgraded clients start
-        // beside the current container instead of reusing a stale absolute screen coordinate.
-        int fallbackX = savedStates.isEmpty() ? ClientConfig.BROWSER_HANDLE_X.getAsInt() : -1;
-        int fallbackY = savedStates.isEmpty() ? ClientConfig.BROWSER_HANDLE_Y.getAsInt() : -1;
         return new State(screenType,
-                fallbackX,
-                fallbackY,
+                UNSET_POSITION,
+                UNSET_POSITION,
                 false,
                 ClientConfig.BROWSER_HANDLE_VISIBLE.getAsBoolean(),
                 ClientConfig.BROWSER_DOCK_SIDE.get());
@@ -44,7 +44,7 @@ final class BrowserScreenStateStore {
         for (String encoded : ClientConfig.BROWSER_SCREEN_STATES.get()) {
             Optional<State> decoded = decode(encoded);
             if (decoded.isPresent() && !decoded.get().screenType().equals(state.screenType())) updated.add(encoded);
-            else if (decoded.isEmpty() && !encoded.startsWith(LEGACY_VERSION_PREFIX)) updated.add(encoded);
+            else if (decoded.isEmpty() && !isLegacyAbsoluteState(encoded)) updated.add(encoded);
         }
         updated.add(encode(state));
         ClientConfig.BROWSER_SCREEN_STATES.set(List.copyOf(updated));
@@ -52,7 +52,8 @@ final class BrowserScreenStateStore {
     }
 
     static String encode(State state) {
-        return String.join("|", VERSION, state.screenType(), Integer.toString(state.x()), Integer.toString(state.y()),
+        return String.join("|", VERSION, state.screenType(),
+                Integer.toString(state.offsetX()), Integer.toString(state.offsetY()),
                 Boolean.toString(state.open()), Boolean.toString(state.visible()), state.dockSide().name());
     }
 
@@ -68,5 +69,9 @@ final class BrowserScreenStateStore {
         } catch (IllegalArgumentException ignored) {
             return Optional.empty();
         }
+    }
+
+    private static boolean isLegacyAbsoluteState(String encoded) {
+        return encoded.startsWith("v1|") || encoded.startsWith("v2|");
     }
 }

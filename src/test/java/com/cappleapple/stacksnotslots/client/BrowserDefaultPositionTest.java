@@ -23,6 +23,15 @@ class BrowserDefaultPositionTest {
         assertEquals(new BrowserDefaultPosition(330, 202), position(ClientConfig.BrowserDefaultPlacement.RIGHT_CENTER));
     }
 
+    @Test
+    void defaultPositionMovesWithTheContainerOnWideScreens() {
+        BrowserDefaultPosition original = BrowserDefaultPosition.resolve(
+                150, 100, 178, 222, ClientConfig.BrowserDefaultPlacement.BOTTOM_RIGHT);
+        BrowserDefaultPosition moved = BrowserDefaultPosition.resolve(
+                900, 240, 178, 222, ClientConfig.BrowserDefaultPlacement.BOTTOM_RIGHT);
+        assertEquals(new BrowserDefaultPosition(original.x() + 750, original.y() + 140), moved);
+    }
+
     private static BrowserDefaultPosition position(ClientConfig.BrowserDefaultPlacement placement) {
         return BrowserDefaultPosition.resolve(150, 100, 178, 222, placement);
     }
