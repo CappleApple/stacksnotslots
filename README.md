@@ -190,8 +190,9 @@ The public entry point is `com.cappleapple.stacksnotslots.api.StacksNotSlotsApi`
 - Broader compatibility fixtures for popular menu/recipe implementations that directly access vanilla fields
 - Datapack reload merging for server preset contributions
 - Rich tooltip text indexing cache for search
-- GameTests covering multi-player concurrent container sessions and death/respawn flows
-- Optional addon examples for equipment mods that apply capacity attribute modifiers
+- More customization features
+
+- Eventually, this mod will be split into 3 separate mods. This one will be the backend library that handles the capacity based inventory, a second mod will be a universally available window manager library, and then the front end part of this that combines the two and gives a UI front end to the techical backend
 
 ## License
 
