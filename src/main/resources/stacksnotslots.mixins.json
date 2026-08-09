@@ -13,8 +13,6 @@
     "SlotMixin"
   ],
   "client": [
-    "ClientPacketListenerMixin",
-    "ConnectionMixin",
     "GuiMixin",
     "MouseHandlerMixin"
   ],

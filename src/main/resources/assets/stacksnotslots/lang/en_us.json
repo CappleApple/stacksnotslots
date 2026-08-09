@@ -96,5 +96,6 @@
   "sort.stacksnotslots.registry_id": "Registry ID",
   "sort.stacksnotslots.mod_namespace": "Mod Namespace",
   "message.stacksnotslots.category_limit": "Category pickup limit reached",
-  "message.stacksnotslots.inventory_full": "Inventory full: %s / %s"
+  "message.stacksnotslots.inventory_full": "Inventory full: %s / %s",
+  "message.stacksnotslots.unsafe_sophisticated_binding": "Sophisticated Core's %s control is bound to plain left-click and is blocking its inventory UI. Rebind it under Controls."
 }

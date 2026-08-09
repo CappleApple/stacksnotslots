@@ -31,6 +31,7 @@ public final class ClientEvents {
     public static void clientTick(ClientTickEvent.Post event) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null) return;
+        KeyBindingCompatibility.warnAboutUnsafeExternalBindings(minecraft);
         while (ClientKeyMappings.CYCLE_FORWARD.consumeClick()) {
             PacketDistributor.sendToServer(new HotbarCyclePayload(minecraft.player.getInventory().selected, 1));
         }
@@ -125,13 +126,4 @@ public final class ClientEvents {
         ContainerInventoryOverlay.characterTyped(event);
     }
 
-    @SubscribeEvent(priority = EventPriority.LOWEST, receiveCanceled = true)
-    public static void traceCustomContainerMousePre(ScreenEvent.MouseButtonPressed.Pre event) {
-        ContainerInteractionTrace.mousePressedPre(event);
-    }
-
-    @SubscribeEvent(priority = EventPriority.LOWEST)
-    public static void traceCustomContainerMousePost(ScreenEvent.MouseButtonPressed.Post event) {
-        ContainerInteractionTrace.mousePressedPost(event);
-    }
 }

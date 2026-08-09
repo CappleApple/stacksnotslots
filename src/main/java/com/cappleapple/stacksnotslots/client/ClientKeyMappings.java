@@ -11,8 +11,9 @@ public final class ClientKeyMappings {
     public static final String CATEGORY = "key.categories.stacksnotslots";
     public static final KeyMapping TOGGLE_BROWSER = new KeyMapping("key.stacksnotslots.toggle_browser",
             KeyConflictContext.GUI, KeyModifier.CONTROL, InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_F, CATEGORY);
-    public static final KeyMapping CYCLE_FORWARD = new KeyMapping("key.stacksnotslots.cycle_forward", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_RIGHT_BRACKET, CATEGORY);
-    public static final KeyMapping CYCLE_BACKWARD = new KeyMapping("key.stacksnotslots.cycle_backward", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_LEFT_BRACKET, CATEGORY);
+    // Avoid Sophisticated Core's default [ and ] bulk-transfer bindings.
+    public static final KeyMapping CYCLE_FORWARD = new KeyMapping("key.stacksnotslots.cycle_forward", InputConstants.Type.MOUSE, GLFW.GLFW_MOUSE_BUTTON_4, CATEGORY);
+    public static final KeyMapping CYCLE_BACKWARD = new KeyMapping("key.stacksnotslots.cycle_backward", InputConstants.Type.MOUSE, GLFW.GLFW_MOUSE_BUTTON_5, CATEGORY);
     public static final KeyMapping DUMP_TO_CONTAINER = new KeyMapping("key.stacksnotslots.dump_to_container",
             KeyConflictContext.UNIVERSAL, KeyModifier.CONTROL, InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_G, CATEGORY);
     public static final KeyMapping EXTRACT_FROM_CONTAINER = new KeyMapping("key.stacksnotslots.extract_from_container",
