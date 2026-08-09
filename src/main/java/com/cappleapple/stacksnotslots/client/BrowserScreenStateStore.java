@@ -7,7 +7,8 @@ import java.util.Optional;
 
 /** Persists one floating-browser state for each concrete container-screen class. */
 final class BrowserScreenStateStore {
-    private static final String VERSION = "v1";
+    private static final String VERSION = "v2";
+    private static final String LEGACY_VERSION_PREFIX = "v1|";
 
     record State(
             String screenType,
@@ -26,7 +27,8 @@ final class BrowserScreenStateStore {
             Optional<State> decoded = decode(encoded);
             if (decoded.isPresent() && decoded.get().screenType().equals(screenType)) return decoded.get();
         }
-        // Preserve the pre-0.6.1 global position once; subsequent unseen screens use the configured anchor.
+        // v1 coordinates predate configurable anchors. Ignoring them once lets upgraded clients start
+        // beside the current container instead of reusing a stale absolute screen coordinate.
         int fallbackX = savedStates.isEmpty() ? ClientConfig.BROWSER_HANDLE_X.getAsInt() : -1;
         int fallbackY = savedStates.isEmpty() ? ClientConfig.BROWSER_HANDLE_Y.getAsInt() : -1;
         return new State(screenType,
@@ -41,7 +43,8 @@ final class BrowserScreenStateStore {
         List<String> updated = new ArrayList<>();
         for (String encoded : ClientConfig.BROWSER_SCREEN_STATES.get()) {
             Optional<State> decoded = decode(encoded);
-            if (decoded.isEmpty() || !decoded.get().screenType().equals(state.screenType())) updated.add(encoded);
+            if (decoded.isPresent() && !decoded.get().screenType().equals(state.screenType())) updated.add(encoded);
+            else if (decoded.isEmpty() && !encoded.startsWith(LEGACY_VERSION_PREFIX)) updated.add(encoded);
         }
         updated.add(encode(state));
         ClientConfig.BROWSER_SCREEN_STATES.set(List.copyOf(updated));

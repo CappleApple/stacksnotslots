@@ -122,6 +122,11 @@ public final class ClientEvents {
     }
 
     @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public static void releaseKeyContainerOverlay(ScreenEvent.KeyReleased.Pre event) {
+        ContainerInventoryOverlay.keyReleased(event);
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void characterContainerOverlay(ScreenEvent.CharacterTyped.Pre event) {
         ContainerInventoryOverlay.characterTyped(event);
     }

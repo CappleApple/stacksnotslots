@@ -16,7 +16,13 @@ class BrowserScreenStateStoreTest {
 
     @Test
     void malformedStateIsIgnored() {
-        assertTrue(BrowserScreenStateStore.decode("v1|broken").isEmpty());
-        assertTrue(BrowserScreenStateStore.decode("v1|Screen|x|2|true|true|LEFT").isEmpty());
+        assertTrue(BrowserScreenStateStore.decode("v2|broken").isEmpty());
+        assertTrue(BrowserScreenStateStore.decode("v2|Screen|x|2|true|true|LEFT").isEmpty());
+    }
+
+    @Test
+    void legacyAbsolutePositionsAreIgnoredAfterAnchorMigration() {
+        assertTrue(BrowserScreenStateStore.decode(
+                "v1|example.inventory.BackpackScreen|125|44|true|false|TOP").isEmpty());
     }
 }

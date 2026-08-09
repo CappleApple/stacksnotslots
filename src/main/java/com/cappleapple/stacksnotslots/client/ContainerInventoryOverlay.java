@@ -53,6 +53,7 @@ public final class ContainerInventoryOverlay {
     private static boolean visible;
     private static ClientConfig.BrowserDockSide dockSide = ClientConfig.BrowserDockSide.RIGHT;
     private static boolean searchFocused;
+    private static int suppressedTypedKey = GLFW.GLFW_KEY_UNKNOWN;
     private static boolean handlePressed;
     private static boolean dragging;
     private static int consumedReleaseButton = -1;
@@ -172,6 +173,7 @@ public final class ContainerInventoryOverlay {
         }
         if (!searchFocused && !(event.getScreen().getFocused() instanceof EditBox)
                 && ClientKeyMappings.SEARCH_BROWSER.isActiveAndMatches(pressedKey)) {
+            suppressedTypedKey = event.getKeyCode();
             beginNewSearch(event.getScreen());
             event.setCanceled(true);
             return;
@@ -206,8 +208,17 @@ public final class ContainerInventoryOverlay {
         event.setCanceled(true);
     }
 
+    public static void keyReleased(ScreenEvent.KeyReleased.Pre event) {
+        if (event.getKeyCode() == suppressedTypedKey) suppressedTypedKey = GLFW.GLFW_KEY_UNKNOWN;
+    }
+
     public static void characterTyped(ScreenEvent.CharacterTyped.Pre event) {
         if (!supports(event.getScreen()) || !open || !searchFocused) return;
+        if (suppressedTypedKey != GLFW.GLFW_KEY_UNKNOWN) {
+            suppressedTypedKey = GLFW.GLFW_KEY_UNKNOWN;
+            event.setCanceled(true);
+            return;
+        }
         if (SEARCH.append(event.getCodePoint())) {
             updateSearch(true);
             event.setCanceled(true);
