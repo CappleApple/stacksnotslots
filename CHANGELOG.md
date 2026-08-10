@@ -2,7 +2,37 @@
 
 ## 1.0 - 2026-08-10
 
-- Promoted the standalone capacity-inventory backend to version 1.0 with no functional changes.
+Stacks Not Slots 1.0 marks the project's transition from an all-in-one player inventory overhaul into a focused library mod for mod developers. The capacity-based inventory backend is now independent, reusable, and ready to serve as a foundation for other mods.
+
+### Important
+
+- Version 1.0 is a library release, not a drop-in replacement for the player-facing 0.6.x releases.
+- Installing Stacks Not Slots by itself no longer changes the player's inventory or adds an inventory interface.
+- The former player-facing experience is being separated into **Bundled Not Siloed**, which uses this library together with **Panels Not Screens**.
+
+### Added
+
+- Added a public API for creating fixed- or dynamically-sized capacity inventories.
+- Added configurable insertion and extraction rules, change listeners, simulated operations, snapshots, transfers, and component-preserving serialization.
+- Added reusable NeoForge item-handler and vanilla inventory compatibility adapters.
+- Added exact capacity accounting for items with any positive maximum stack size.
+- Added developer documentation and examples for integrating the library into machines, backpacks, storage blocks, vehicles, NPCs, player attachments, and other inventory implementations.
+
+### Changed
+
+- Refocused the mod on its core concept: inventories limited by total capacity instead of a fixed number of slots.
+- Moved the supported public API under `com.cappleapple.stacksnotslots.api`.
+- Made ownership, persistence, networking, synchronization, and user interface behavior the responsibility of the consuming mod so the backend can support many inventory types.
+- Updated the project metadata and documentation to present Stacks Not Slots as an independent NeoForge 1.21.1 library.
+
+### Removed
+
+- Removed the built-in player inventory replacement, inventory browser, category system, hotbar bindings, commands, configuration, networking, and player-specific storage behavior.
+- Removed the built-in screens, keybinds, mixins, and JEI/EMI interface integration.
+
+### For Players
+
+You only need to install Stacks Not Slots when another mod lists it as a dependency. For the complete player-facing inventory overhaul previously included in this project, use **Bundled Not Siloed** when it becomes available.
 
 ## 0.6.5 - 2026-08-10
 
