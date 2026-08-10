@@ -1,36 +1,35 @@
 package com.cappleapple.stacksnotslots.api;
 
-import com.cappleapple.stacksnotslots.data.ModAttachments;
-import com.cappleapple.stacksnotslots.inventory.CapacityCosts;
+import com.cappleapple.stacksnotslots.api.inventory.InventoryFactory;
+import com.cappleapple.stacksnotslots.api.inventory.InventoryOptions;
+import com.cappleapple.stacksnotslots.api.inventory.MutableCapacityInventory;
+import com.cappleapple.stacksnotslots.internal.inventory.CapacityCosts;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 
-/** Stable public entry point; callers never need to depend on implementation packages. */
+/** Stable public entry point for standalone capacity inventories and capacity accounting. */
 public final class StacksNotSlotsApi {
-    public static final ResourceLocation INVENTORY_CAPACITY_ATTRIBUTE = com.cappleapple.stacksnotslots.StacksNotSlots.id("inventory_capacity");
-    private StacksNotSlotsApi() {}
+    private StacksNotSlotsApi() { }
 
-    public static ICapacityInventory inventory(Player player) {
-        return player.getData(ModAttachments.PLAYER_DATA).inventory();
+    public static MutableCapacityInventory createInventory(long capacity) {
+        return InventoryFactory.create(capacity);
+    }
+
+    public static MutableCapacityInventory createInventory(InventoryOptions options) {
+        return InventoryFactory.create(options);
     }
 
     public static long capacityCost(ItemStack stack) {
-        return CapacityCosts.cost(stack, stack.getCount());
+        return CapacityCosts.cost(stack, stack == null ? 0 : stack.getCount());
     }
 
-    /** Exact capacity cost. Prefer this over the rounded legacy {@link #capacityCost(ItemStack)} view. */
+    /** Exact rational capacity cost, including items whose maximum stack size does not divide 64. */
     public static CapacityAmount exactCapacityCost(ItemStack stack) {
-        return CapacityCosts.costExact(stack, stack.getCount());
+        return CapacityCosts.costExact(stack, stack == null ? 0 : stack.getCount());
     }
 
-    public static AutoCloseable registerCapacityCostProvider(ResourceLocation id, int priority, CapacityCostProvider provider) {
+    public static AutoCloseable registerCapacityCostProvider(ResourceLocation id, int priority,
+                                                              CapacityCostProvider provider) {
         return CapacityCosts.register(id, priority, provider);
-    }
-
-    public static java.util.List<CategoryView> categories(Player player) {
-        return player.getData(ModAttachments.PLAYER_DATA).categories().categories().stream()
-                .map(CategoryView::fromDefinition)
-                .toList();
     }
 }

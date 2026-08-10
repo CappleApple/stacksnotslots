@@ -3,6 +3,10 @@ package com.cappleapple.stacksnotslots.api;
 import java.util.List;
 import net.minecraft.world.item.ItemStack;
 
+/**
+ * Stable logical-inventory contract. Implementations are capacity-based and are not required to
+ * expose or emulate a fixed number of vanilla slots.
+ */
 public interface ICapacityInventory {
     long capacity();
     long usedCapacity();
@@ -17,6 +21,27 @@ public interface ICapacityInventory {
     List<LogicalInventoryEntry> entries();
     InsertionResult insert(ItemStack stack, boolean simulate);
     ExtractionResult extract(ItemStack prototype, int amount, boolean simulate);
+
+    default boolean canInsert(ItemStack stack) {
+        return stack != null && !stack.isEmpty() && insert(stack, true).acceptedAmount() > 0;
+    }
+
+    default boolean canExtract(ItemStack prototype) {
+        return prototype != null && !prototype.isEmpty() && extract(prototype, 1, true).extractedAmount() > 0;
+    }
+
+    default long count(ItemStack prototype) {
+        if (prototype == null || prototype.isEmpty()) return 0;
+        return entries().stream()
+                .filter(entry -> ItemStack.isSameItemSameComponents(entry.representative(), prototype))
+                .mapToLong(LogicalInventoryEntry::quantity)
+                .sum();
+    }
+
+    default long totalItemCount() {
+        return entries().stream().mapToLong(LogicalInventoryEntry::quantity).sum();
+    }
+
     long revision();
     AutoCloseable addListener(InventoryChangeListener listener);
 }

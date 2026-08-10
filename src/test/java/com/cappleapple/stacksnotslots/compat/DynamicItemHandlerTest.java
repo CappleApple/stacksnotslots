@@ -1,9 +1,11 @@
 package com.cappleapple.stacksnotslots.compat;
 
+import com.cappleapple.stacksnotslots.api.compat.DynamicItemHandler;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.cappleapple.stacksnotslots.inventory.DynamicCapacityInventory;
+import com.cappleapple.stacksnotslots.api.inventory.DynamicCapacityInventory;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.item.ItemStack;

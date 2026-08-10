@@ -1,10 +1,12 @@
 package com.cappleapple.stacksnotslots.compat;
 
+import com.cappleapple.stacksnotslots.api.compat.VanillaInventoryMirror;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.cappleapple.stacksnotslots.inventory.DynamicCapacityInventory;
+import com.cappleapple.stacksnotslots.api.inventory.DynamicCapacityInventory;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.SharedConstants;

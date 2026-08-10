@@ -17,11 +17,6 @@ sourceSets.main.resources {
     exclude('src/generated/**/.cache')
 }
 
-repositories {
-    maven { url = 'https://maven.blamejared.com' }
-    maven { url = 'https://maven.terraformersmc.com/releases' }
-}
-
 base {
     archivesName = mod_id
 }
@@ -75,26 +70,9 @@ neoForge {
     }
 }
 
-// Compatibility fixtures are available in development but never become published dependencies.
-configurations {
-    runtimeClasspath.extendsFrom localRuntime
-}
-
 dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    def localJei = fileTree('modstotestwith') { include 'jei-*.jar' }
-    def localEmi = fileTree('modstotestwith') { include 'emi-*.jar' }
-    def localSophisticated = fileTree('modstotestwith') { include 'sophisticated*.jar' }
-    def localMouseTweaks = fileTree('modstotestwith') { include 'MouseTweaks-*.jar' }
-    def localTomsStorage = fileTree('modstotestwith') { include 'toms_storage-*.jar' }
-    if (!localJei.files.isEmpty()) compileOnly files(localJei)
-    else compileOnly 'mezz.jei:jei-1.21.1-neoforge-api:19.42.0.379'
-    if (!localEmi.files.isEmpty()) compileOnly files(localEmi)
-    else compileOnly 'dev.emi:emi-neoforge:1.1.24+1.21.1'
-    if (!project.hasProperty('skipOptionalCompatRuntime')) {
-        localRuntime files(localJei, localEmi, localSophisticated, localMouseTweaks, localTomsStorage)
-    }
 }
 
 tasks.named('test', Test).configure {

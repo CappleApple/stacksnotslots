@@ -1,68 +1,43 @@
-# Public API
+# Stacks Not Slots developer API
 
-The API package is `com.cappleapple.stacksnotslots.api`. Implementation classes are not part of the compatibility contract.
+Use `StacksNotSlotsApi.createInventory(...)` or `InventoryFactory.create(...)`. Consumers should depend on types in `com.cappleapple.stacksnotslots.api`; no player or UI integration is assumed.
 
-## Entry point
-
-```java
-ICapacityInventory inventory = StacksNotSlotsApi.inventory(player);
-
-long capacity = inventory.capacity();
-long used = inventory.usedCapacity();
-long remaining = inventory.remainingCapacity();
-CapacityAmount exactUsed = inventory.exactUsedCapacity();
-CapacityAmount exactRemaining = inventory.exactRemainingCapacity();
-boolean overCapacity = inventory.isOverCapacity();
-List<LogicalInventoryEntry> entries = inventory.entries();
-```
-
-Returned entries and stacks are defensive views. Hotbar/category metadata never owns an `ItemStack`. The legacy `usedCapacity()` value rounds fractional usage upward and `remainingCapacity()` rounds downward; use the exact methods for calculations involving items whose max stack size exceeds 64 or does not divide 64 evenly.
-
-## Transactions
+## Creation and policy
 
 ```java
-InsertionResult simulation = inventory.insert(stack, true);
-InsertionResult insertion = inventory.insert(stack, false);
-ExtractionResult extraction = inventory.extract(prototype, amount, false);
-```
-
-Inputs are not mutated. Insertion reports requested/accepted amounts, a defensive remainder, a conservative upward-rounded whole-unit capacity-consumed value, and a rejection reason. Extraction may return multiple legal stacks when the requested quantity spans backing stacks. Read `exactUsedCapacity()` before and after a transaction when an exact consumed delta is required.
-
-Use simulation before a multi-inventory transaction. If another system changes the inventory between simulation and commit, validate the real result; a simulation is not a lock.
-
-## Change listeners
-
-```java
-AutoCloseable registration = inventory.addListener((changed, revision) -> {
-    // invalidate derived state
-});
-registration.close();
-```
-
-Listeners run on the mutation thread. Server inventory mutations are expected on the server thread; listeners should remain fast and must not recursively mutate the same inventory.
-
-## Capacity-cost providers
-
-```java
-AutoCloseable registration = StacksNotSlotsApi.registerCapacityCostProvider(
-    ResourceLocation.fromNamespaceAndPath("addon", "special_weights"),
-    100,
-    stack -> stack.is(MY_ITEM) ? 12 : -1
+MutableCapacityInventory storage = InventoryFactory.create(
+    InventoryOptions.builder(capacitySupplier)
+        .insertionRule(stack -> isValidInput(stack))
+        .extractionRule(stack -> !isLocked(stack))
+        .mutationListener(this::setChanged)
+        .build()
 );
 ```
 
-Return a positive whole-unit per-item override when applicable and `-1` to defer. Higher priority runs first, followed by resource-ID order. Close the registration to remove it. The fallback is the exact fraction `64 / maxStackSize`, so every complete legal stack costs exactly 64 units regardless of its stack size.
+Rules run on normal insertion/extraction calls. Loading saved authoritative contents and applying a trusted server snapshot restore the encoded state so a later rule change does not silently destroy existing items.
 
-`StacksNotSlotsApi.capacityCost(stack)` remains a conservative upward-rounded whole-unit compatibility view. Use `StacksNotSlotsApi.exactCapacityCost(stack)` to receive a `CapacityAmount`. `CapacityAmount` is an immutable normalized rational number with exact arithmetic, comparisons, floor/ceiling views, and display conversion methods.
+## Queries and transactions
 
-## Attribute and categories
+`entries()` returns aggregated identities with defensive representative stacks and `long` quantities. `count`, `totalItemCount`, capacity, exact capacity, remaining capacity, over-capacity state, and revision queries are available without exposing backing storage.
 
-`StacksNotSlotsApi.INVENTORY_CAPACITY_ATTRIBUTE` is the stable `stacksnotslots:inventory_capacity` resource ID. Use normal Minecraft attribute modifiers rather than backpack-specific calls into the inventory engine.
+Insertion and extraction never mutate caller-owned input stacks. Pass `true` for simulation and `false` to commit. `InventoryTransfer.move` simulates the destination before extracting and returns unexpected commit-time remainders to the source. If consumer callbacks change both inventories during the commit and the source then rejects restoration, the result exposes defensive `unresolvedRemainders()` so ownership is never silently discarded.
 
-`StacksNotSlotsApi.categories(player)` returns public `CategoryView`/`CategoryRuleView` records. Rule types are `ITEM`, `TAG`, `MOD_ID`, and `REGEX`; the `MOD_ID` target's namespace is the matched mod namespace, while `REGEX` uses `expression()` and has a null `target()`. Tag rules cover item tags and represented block tags. Treat these immutable values as query metadata only; internal category implementation types are not part of the API contract.
+## Persistence and synchronization
 
-## NeoForge capability
+`serializeNBT`/`deserializeNBT` preserve item IDs, counts, data components, sparse indexed placement, unresolved entries, and revision metadata. `snapshot()` returns defensive copies suitable for a consumer's networking protocol; only apply snapshots received through a trusted server-authoritative path.
 
-Query `Capabilities.ItemHandler.ENTITY` on a player for the dynamic compatibility view. Indices are stable sparse compatibility positions: an emptied interior index remains empty rather than shifting every later stack, and the last index is an append slot. Slot-specific insert/replace calls affect the requested index. `getSlots()` grows as needed and must never be cached as a capacity limit.
+Stacks Not Slots deliberately does not prescribe packet IDs or tracking scope because a machine block entity, backpack item, NPC, and player attachment have different ownership and visibility rules.
 
-The handler is a view over the same authoritative collection. Simulation, extraction, and stack limits obey the central inventory rules.
+## Capacity accounting
+
+Use `CapacityUnits.exactUnitCost` and `CapacityUnits.exactCost` for calculations. `CapacityAmount` is an immutable normalized rational value. Whole-unit helpers round conservatively.
+
+Capacity providers are priority ordered and registered through `StacksNotSlotsApi.registerCapacityCostProvider`. Return a non-negative whole-unit per-item override when applicable and `-1` to defer to the next provider or the exact `64 / maxStackSize` fallback.
+
+## NeoForge compatibility
+
+`com.cappleapple.stacksnotslots.api.compat.DynamicItemHandler` exposes the same inventory as a sparse, dynamically growing `IItemHandlerModifiable`; its last index is an append position, not a storage ceiling. `VanillaInventoryMirror` is an opt-in helper for consumers that intentionally maintain a bounded vanilla-list projection.
+
+## Threading and authority
+
+The library performs no client-authoritative mutation. The owning mod must execute authoritative mutations on its server thread and decide who may send requests. Change listeners run synchronously on the mutation thread and should remain fast.

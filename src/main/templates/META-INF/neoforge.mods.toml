@@ -12,11 +12,8 @@ authors="CappleApple"
 logoFile="assets/stacksnotslots/textures/gui/stacks-not-slots-logo.png"
 logoBlur=false
 description='''
-Makes the player's inventory based on capacity rather than geometry.
+A reusable API for inventories based on logical stacks and capacity rather than fixed slot geometry.
 '''
-
-[[mixins]]
-config="${mod_id}.mixins.json"
 
 [[dependencies.${mod_id}]]
     modId="neoforge"
