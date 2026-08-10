@@ -1,9 +1,10 @@
 package com.cappleapple.stacksnotslots.mixin;
 
+import com.cappleapple.stacksnotslots.api.CapacityAmount;
+import com.cappleapple.stacksnotslots.config.CommonConfig;
 import com.cappleapple.stacksnotslots.data.ModAttachments;
 import com.cappleapple.stacksnotslots.inventory.CapacityCosts;
 import com.cappleapple.stacksnotslots.inventory.DynamicCapacityInventory;
-import com.cappleapple.stacksnotslots.config.CommonConfig;
 import com.cappleapple.stacksnotslots.pickup.PickupLimitCalculator;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Inventory;
@@ -29,9 +30,12 @@ public abstract class SlotMixin {
         if (!data.migratedVanillaInventory() || slot < 0 || slot >= Inventory.INVENTORY_SIZE || incoming.isEmpty()) return;
         DynamicCapacityInventory inventory = data.inventory();
         ItemStack existing = playerInventory.getItem(slot);
-        long replaceableCapacity = inventory.remainingCapacity();
-        if (!existing.isEmpty()) replaceableCapacity = Math.min(Long.MAX_VALUE, replaceableCapacity + CapacityCosts.cost(existing, existing.getCount()));
-        int allowed = (int)Math.min(incoming.getMaxStackSize(), replaceableCapacity / CapacityCosts.unitCost(incoming));
+        CapacityAmount replaceableCapacity = inventory.exactRemainingCapacity();
+        if (!existing.isEmpty()) {
+            replaceableCapacity = replaceableCapacity.add(CapacityCosts.costExact(existing, existing.getCount()));
+        }
+        int allowed = (int)Math.min(incoming.getMaxStackSize(),
+                replaceableCapacity.divideFloorToLong(CapacityCosts.unitCostExact(incoming)));
         if (CommonConfig.CATEGORY_LIMITS_MANUAL_TRANSFERS.getAsBoolean()) {
             int additional = PickupLimitCalculator.maximumAccepted(inventory, data.categories().categories(), incoming, incoming.getMaxStackSize());
             int existingCount = !existing.isEmpty() && ItemStack.isSameItemSameComponents(existing, incoming) ? existing.getCount() : 0;

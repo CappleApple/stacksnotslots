@@ -10,11 +10,13 @@ ICapacityInventory inventory = StacksNotSlotsApi.inventory(player);
 long capacity = inventory.capacity();
 long used = inventory.usedCapacity();
 long remaining = inventory.remainingCapacity();
+CapacityAmount exactUsed = inventory.exactUsedCapacity();
+CapacityAmount exactRemaining = inventory.exactRemainingCapacity();
 boolean overCapacity = inventory.isOverCapacity();
 List<LogicalInventoryEntry> entries = inventory.entries();
 ```
 
-Returned entries and stacks are defensive views. Hotbar/category metadata never owns an `ItemStack`.
+Returned entries and stacks are defensive views. Hotbar/category metadata never owns an `ItemStack`. The legacy `usedCapacity()` value rounds fractional usage upward and `remainingCapacity()` rounds downward; use the exact methods for calculations involving items whose max stack size exceeds 64 or does not divide 64 evenly.
 
 ## Transactions
 
@@ -24,7 +26,7 @@ InsertionResult insertion = inventory.insert(stack, false);
 ExtractionResult extraction = inventory.extract(prototype, amount, false);
 ```
 
-Inputs are not mutated. Insertion reports requested/accepted amounts, a defensive remainder, capacity consumed, and a rejection reason. Extraction may return multiple legal stacks when the requested quantity spans backing stacks.
+Inputs are not mutated. Insertion reports requested/accepted amounts, a defensive remainder, a conservative upward-rounded whole-unit capacity-consumed value, and a rejection reason. Extraction may return multiple legal stacks when the requested quantity spans backing stacks. Read `exactUsedCapacity()` before and after a transaction when an exact consumed delta is required.
 
 Use simulation before a multi-inventory transaction. If another system changes the inventory between simulation and commit, validate the real result; a simulation is not a lock.
 
@@ -49,7 +51,9 @@ AutoCloseable registration = StacksNotSlotsApi.registerCapacityCostProvider(
 );
 ```
 
-Return a positive per-item cost when applicable and `-1` to defer. Higher priority runs first, followed by resource-ID order. Close the registration to remove it. The fallback is `ceil(64 / maxStackSize)`, clamped to at least one.
+Return a positive whole-unit per-item override when applicable and `-1` to defer. Higher priority runs first, followed by resource-ID order. Close the registration to remove it. The fallback is the exact fraction `64 / maxStackSize`, so every complete legal stack costs exactly 64 units regardless of its stack size.
+
+`StacksNotSlotsApi.capacityCost(stack)` remains a conservative upward-rounded whole-unit compatibility view. Use `StacksNotSlotsApi.exactCapacityCost(stack)` to receive a `CapacityAmount`. `CapacityAmount` is an immutable normalized rational number with exact arithmetic, comparisons, floor/ceiling views, and display conversion methods.
 
 ## Attribute and categories
 

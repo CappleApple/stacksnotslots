@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.5-test.1 - 2026-08-10
+
+### Changed
+
+- Capacity accounting now supports every positive item max-stack size with exact proportional costs. A complete legal stack always costs 64 units, so individual 128-stackable items cost 0.5 units and 96-stackable items cost exactly 2/3 of a unit.
+- Capacity acceptance, category pickup limits, slot replacement, invariant repair, commands, percentages, and the browser capacity display now use exact rational arithmetic without floating-point drift.
+- Added exact capacity values to the public API while retaining conservative rounded whole-unit methods for source compatibility.
+
 ## 0.6.4 - 2026-08-09
 
 ### Changed

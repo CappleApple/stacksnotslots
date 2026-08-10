@@ -3,6 +3,7 @@ package com.cappleapple.stacksnotslots.client;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.cappleapple.stacksnotslots.api.LogicalInventoryEntry;
+import com.cappleapple.stacksnotslots.api.CapacityAmount;
 import com.cappleapple.stacksnotslots.config.ClientConfig;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.Bootstrap;
@@ -32,5 +33,13 @@ class InventoryCountFormatterTest {
         assertEquals("50%", InventoryCountFormatter.item(stone, 1_728, ClientConfig.ItemCountMode.PERCENTAGE));
         assertEquals("27S / 27S", InventoryCountFormatter.overall(1_728, 1_728, ClientConfig.OverallCountMode.STACKS));
         assertEquals("50%", InventoryCountFormatter.overall(864, 1_728, ClientConfig.OverallCountMode.PERCENTAGE));
+    }
+
+    @Test
+    void overallModesRetainFractionalCapacity() {
+        CapacityAmount half = CapacityAmount.fraction(1, 2);
+
+        assertEquals("0.5 / 1", InventoryCountFormatter.overall(half, 1, ClientConfig.OverallCountMode.EXACT));
+        assertEquals("50%", InventoryCountFormatter.overall(half, 1, ClientConfig.OverallCountMode.PERCENTAGE));
     }
 }

@@ -1,5 +1,6 @@
 package com.cappleapple.stacksnotslots.client;
 
+import com.cappleapple.stacksnotslots.api.CapacityAmount;
 import com.cappleapple.stacksnotslots.api.LogicalInventoryEntry;
 import com.cappleapple.stacksnotslots.config.ClientConfig;
 import com.cappleapple.stacksnotslots.inventory.CapacityCosts;
@@ -20,26 +21,38 @@ public final class InventoryCountFormatter {
             case COMPACT -> compact(quantity);
             case STACKS -> decimal(quantity / (double)stackSize) + "S";
             case STACKS_REMAINDER -> quantity / stackSize + "s+" + quantity % stackSize;
-            case PERCENTAGE -> percentage(CapacityCosts.cost(entry.representative(), quantity), capacity);
+            case PERCENTAGE -> percentage(CapacityCosts.costExact(entry.representative(), quantity), capacity);
         };
     }
 
     public static String overall(long used, long capacity) {
-        return overall(used, capacity, ClientConfig.OVERALL_COUNT_MODE.get());
+        return overall(CapacityAmount.of(used), capacity, ClientConfig.OVERALL_COUNT_MODE.get());
     }
 
     static String overall(long used, long capacity, ClientConfig.OverallCountMode mode) {
+        return overall(CapacityAmount.of(used), capacity, mode);
+    }
+
+    public static String overall(CapacityAmount used, long capacity) {
+        return overall(used, capacity, ClientConfig.OVERALL_COUNT_MODE.get());
+    }
+
+    static String overall(CapacityAmount used, long capacity, ClientConfig.OverallCountMode mode) {
         return switch (mode) {
-            case EXACT -> used + " / " + capacity;
-            case COMPACT -> compact(used) + " / " + compact(capacity);
-            case STACKS -> decimal(used / 64.0) + "S / " + decimal(capacity / 64.0) + "S";
+            case EXACT -> used.decimalString() + " / " + capacity;
+            case COMPACT -> compact(used.doubleValue()) + " / " + compact(capacity);
+            case STACKS -> decimal(used.doubleValue() / 64.0) + "S / " + decimal(capacity / 64.0) + "S";
             case PERCENTAGE -> percentage(used, capacity);
         };
     }
 
     public static String compact(long value) {
-        long absolute = value == Long.MIN_VALUE ? Long.MAX_VALUE : Math.abs(value);
-        if (absolute < 1_000) return Long.toString(value);
+        return compact((double)value);
+    }
+
+    private static String compact(double value) {
+        double absolute = Math.abs(value);
+        if (absolute < 1_000) return decimal(value);
         String[] suffixes = {"k", "m", "b", "t", "q"};
         double scaled = value;
         int suffix = -1;
@@ -47,9 +60,9 @@ public final class InventoryCountFormatter {
         return decimal(scaled) + suffixes[suffix];
     }
 
-    private static String percentage(long amount, long capacity) {
-        if (capacity <= 0) return amount <= 0 ? "0%" : "100%+";
-        return decimal(amount * 100.0 / capacity) + "%";
+    private static String percentage(CapacityAmount amount, long capacity) {
+        if (capacity <= 0) return amount.isZero() ? "0%" : "100%+";
+        return decimal(amount.doubleValue() * 100.0 / capacity) + "%";
     }
 
     private static String decimal(double value) {

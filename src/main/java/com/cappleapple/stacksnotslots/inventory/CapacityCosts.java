@@ -1,5 +1,6 @@
 package com.cappleapple.stacksnotslots.inventory;
 
+import com.cappleapple.stacksnotslots.api.CapacityAmount;
 import com.cappleapple.stacksnotslots.api.CapacityCostProvider;
 import java.util.Comparator;
 import java.util.Objects;
@@ -15,23 +16,29 @@ public final class CapacityCosts {
 
     private CapacityCosts() {}
 
+    /** Legacy whole-unit view. Fractional costs are rounded upward; use {@link #unitCostExact(ItemStack)} internally. */
     public static long unitCost(ItemStack stack) {
-        if (stack.isEmpty()) return 0;
-        for (Registration registration : PROVIDERS) {
-            long cost = registration.provider.capacityCostPerItem(stack);
-            if (cost >= 0) return Math.max(1, cost);
-        }
-        int maxStackSize = Math.max(1, stack.getMaxStackSize());
-        return Math.max(1, Math.ceilDiv(STACK_EQUIVALENT_UNITS, maxStackSize));
+        return unitCostExact(stack).ceilToLong();
     }
 
-    public static long cost(ItemStack stack, long amount) {
-        if (stack.isEmpty() || amount <= 0) return 0;
-        try {
-            return Math.multiplyExact(unitCost(stack), amount);
-        } catch (ArithmeticException ignored) {
-            return Long.MAX_VALUE;
+    public static CapacityAmount unitCostExact(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return CapacityAmount.ZERO;
+        for (Registration registration : PROVIDERS) {
+            long cost = registration.provider.capacityCostPerItem(stack);
+            if (cost >= 0) return CapacityAmount.of(Math.max(1, cost));
         }
+        int maxStackSize = Math.max(1, stack.getMaxStackSize());
+        return CapacityAmount.fraction(STACK_EQUIVALENT_UNITS, maxStackSize);
+    }
+
+    /** Legacy whole-unit view of the total, rounded upward for compatibility. */
+    public static long cost(ItemStack stack, long amount) {
+        return costExact(stack, amount).ceilToLong();
+    }
+
+    public static CapacityAmount costExact(ItemStack stack, long amount) {
+        if (stack == null || stack.isEmpty() || amount <= 0) return CapacityAmount.ZERO;
+        return unitCostExact(stack).multiply(amount);
     }
 
     public static AutoCloseable register(ResourceLocation id, int priority, CapacityCostProvider provider) {

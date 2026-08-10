@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.cappleapple.stacksnotslots.api.CapacityAmount;
 import com.cappleapple.stacksnotslots.api.InsertionRejection;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.Map;
@@ -53,7 +54,7 @@ class DynamicCapacityInventoryTest {
     }
 
     @Test
-    void stackSizesUseIntegerStackEquivalentCosts() {
+    void stackSizesUseStackEquivalentCosts() {
         assertEquals(1, CapacityCosts.unitCost(new ItemStack(Items.COBBLESTONE)));
         assertEquals(4, CapacityCosts.unitCost(new ItemStack(Items.ENDER_PEARL)));
         assertEquals(64, CapacityCosts.unitCost(new ItemStack(Items.POTION)));
@@ -65,6 +66,31 @@ class DynamicCapacityInventoryTest {
         DynamicCapacityInventory inventory = new DynamicCapacityInventory(() -> 64);
         assertTrue(inventory.insert(new ItemStack(Items.ENDER_PEARL, 16), false).acceptedAll());
         assertEquals(64, inventory.usedCapacity());
+    }
+
+    @Test
+    void stackSizesAbove64UseExactFractionalCosts() {
+        ItemStack max128Stack = new ItemStack(Items.STONE);
+        max128Stack.set(DataComponents.MAX_STACK_SIZE, 128);
+        max128Stack.setCount(128);
+        ItemStack max96Stack = new ItemStack(Items.DIRT);
+        max96Stack.set(DataComponents.MAX_STACK_SIZE, 96);
+        max96Stack.setCount(96);
+
+        assertEquals(CapacityAmount.fraction(1, 2), CapacityCosts.unitCostExact(max128Stack));
+        assertEquals(CapacityAmount.fraction(2, 3), CapacityCosts.unitCostExact(max96Stack));
+        assertEquals(CapacityAmount.of(64), CapacityCosts.costExact(max128Stack, 128));
+        assertEquals(CapacityAmount.of(64), CapacityCosts.costExact(max96Stack, 96));
+
+        DynamicCapacityInventory inventory = new DynamicCapacityInventory(() -> 1);
+        assertEquals(2, inventory.insert(max128Stack.copyWithCount(3), false).acceptedAmount());
+        assertEquals(CapacityAmount.of(1), inventory.exactUsedCapacity());
+        assertEquals(0, inventory.insert(max128Stack.copyWithCount(1), false).acceptedAmount());
+
+        assertEquals(1, inventory.extract(max128Stack, 1, false).extractedAmount());
+        assertEquals(CapacityAmount.fraction(1, 2), inventory.exactUsedCapacity());
+        assertEquals(1, inventory.insert(max128Stack.copyWithCount(1), false).acceptedAmount());
+        assertTrue(inventory.validate());
     }
 
     @Test

@@ -1,11 +1,12 @@
 package com.cappleapple.stacksnotslots.command;
 
-import com.mojang.brigadier.CommandDispatcher;
-import com.cappleapple.stacksnotslots.category.CategoryPresetManager;
 import com.cappleapple.stacksnotslots.StacksNotSlots;
+import com.cappleapple.stacksnotslots.api.CapacityAmount;
+import com.cappleapple.stacksnotslots.category.CategoryPresetManager;
 import com.cappleapple.stacksnotslots.data.ModAttachments;
 import com.cappleapple.stacksnotslots.inventory.DynamicCapacityInventory;
 import com.cappleapple.stacksnotslots.network.ModNetwork;
+import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
@@ -32,9 +33,10 @@ public final class ModCommands {
 
     private static int capacity(CommandSourceStack source, ServerPlayer player) {
         DynamicCapacityInventory inventory = player.getData(ModAttachments.PLAYER_DATA).inventory();
-        long excess = Math.max(0, inventory.usedCapacity() - inventory.capacity());
-        source.sendSuccess(() -> Component.literal(player.getGameProfile().getName() + ": " + inventory.usedCapacity() + " / " + inventory.capacity()
-                + (excess > 0 ? " (OVER CAPACITY by " + excess + ")" : "")), false);
+        CapacityAmount used = inventory.exactUsedCapacity();
+        CapacityAmount excess = used.subtract(CapacityAmount.of(inventory.capacity())).maxZero();
+        source.sendSuccess(() -> Component.literal(player.getGameProfile().getName() + ": " + used.decimalString() + " / " + inventory.capacity()
+                + (!excess.isZero() ? " (OVER CAPACITY by " + excess.decimalString() + ")" : "")), false);
         return (int)Math.min(Integer.MAX_VALUE, inventory.remainingCapacity());
     }
 

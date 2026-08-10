@@ -2,7 +2,7 @@
 
 Stacks Not Slots is a NeoForge mod for Minecraft 1.21.1 that makes player storage capacity-based instead of slot-count-based. The authoritative inventory is a dynamically growing collection of legal `ItemStack` values. The nine-position hotbar and vanilla inventory indices are access views over that collection; neither grants storage nor limits how many distinct entries can exist.
 
-The default capacity is 2,304 units: 36 stack-equivalents covering the vanilla 27-slot main grid plus 9-slot hotbar. A 64-stackable item costs one unit, a 16-stackable item costs four, and a non-stackable item costs 64. Capacity includes hotbar-accessed items and is controlled live by the `stacksnotslots:inventory_capacity` player attribute.
+The default capacity is 2,304 units: 36 stack-equivalents covering the vanilla 27-slot main grid plus 9-slot hotbar. Every complete legal stack costs exactly 64 units: a 64-stackable item costs one unit each, a 16-stackable item costs four, a non-stackable item costs 64, and a 128-stackable item costs one half. Exact rational accounting supports any positive max-stack size without floating-point drift. Capacity includes hotbar-accessed items and is controlled live by the `stacksnotslots:inventory_capacity` player attribute.
 
 There is no hidden compatibility-slot ceiling below capacity. If a player has capacity `N`, the backend and NeoForge item-handler view can grow to represent `N` distinct quantity-one 64-stackable identities (subject only to Java's practical integer/memory limits). Snapshot chunking and the vanilla 36-index projection are transport/access details, never carrying limits.
 
@@ -13,7 +13,7 @@ Implemented:
 - Dynamic logical inventory with no configured backing-slot maximum
 - Sparse, dynamically indexed compatibility slots that retain explicit placement, plus an append slot
 - Runtime capacity attribute and normal Minecraft attribute-modifier support
-- Integer capacity costs with a public override registry
+- Exact proportional capacity costs with conservative whole-unit compatibility views and a public override registry
 - Transactional simulated/real partial insertion and extraction
 - Automatic consolidation that respects data components
 - Persistent NeoForge player attachment, lossless vanilla-inventory migration, and unresolved-entry preservation
@@ -63,7 +63,7 @@ Linux/macOS:
 ./gradlew runServer
 ```
 
-The built mod is written to `build/libs/stacksnotslots-0.6.4.jar`. The project uses official Mojang mappings with Parchment parameter names and ModDevGradle's Minecraft-aware JUnit support.
+The built mod is written to `build/libs/stacksnotslots-0.6.5-test.1.jar`. The project uses official Mojang mappings with Parchment parameter names and ModDevGradle's Minecraft-aware JUnit support.
 
 ## Player usage
 

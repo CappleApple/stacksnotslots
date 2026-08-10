@@ -2,12 +2,14 @@ package com.cappleapple.stacksnotslots.pickup;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.cappleapple.stacksnotslots.api.CapacityAmount;
 import com.cappleapple.stacksnotslots.category.CategoryDefinition;
 import com.cappleapple.stacksnotslots.category.CategoryRule;
 import com.cappleapple.stacksnotslots.category.SortMode;
 import com.cappleapple.stacksnotslots.inventory.DynamicCapacityInventory;
 import java.util.List;
 import net.minecraft.SharedConstants;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.Bootstrap;
@@ -34,6 +36,19 @@ class PickupLimitCalculatorTest {
         CategoryDefinition excluded = category("excluded", 5, true);
         DynamicCapacityInventory inventory = new DynamicCapacityInventory(() -> 1_000);
         assertEquals(32, PickupLimitCalculator.maximumAccepted(inventory, List.of(excluded), new ItemStack(Items.DIAMOND, 32), 32));
+    }
+
+    @Test
+    void categoryLimitsRetainFractionalUsageForLargeStacks() {
+        ItemStack diamond = new ItemStack(Items.DIAMOND);
+        diamond.set(DataComponents.MAX_STACK_SIZE, 128);
+        DynamicCapacityInventory inventory = new DynamicCapacityInventory(() -> 10);
+        inventory.insert(diamond, false);
+        CategoryDefinition category = category("large_stack", 1, false);
+
+        assertEquals(CapacityAmount.fraction(1, 2),
+                PickupLimitCalculator.usageForCategoryExact(inventory, category));
+        assertEquals(1, PickupLimitCalculator.maximumAccepted(inventory, List.of(category), diamond.copyWithCount(4), 4));
     }
 
     private static CategoryDefinition category(String name, long limit, boolean excludeDiamond) {

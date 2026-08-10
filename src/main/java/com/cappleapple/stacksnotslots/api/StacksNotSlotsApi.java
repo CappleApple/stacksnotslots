@@ -19,6 +19,11 @@ public final class StacksNotSlotsApi {
         return CapacityCosts.cost(stack, stack.getCount());
     }
 
+    /** Exact capacity cost. Prefer this over the rounded legacy {@link #capacityCost(ItemStack)} view. */
+    public static CapacityAmount exactCapacityCost(ItemStack stack) {
+        return CapacityCosts.costExact(stack, stack.getCount());
+    }
+
     public static AutoCloseable registerCapacityCostProvider(ResourceLocation id, int priority, CapacityCostProvider provider) {
         return CapacityCosts.register(id, priority, provider);
     }

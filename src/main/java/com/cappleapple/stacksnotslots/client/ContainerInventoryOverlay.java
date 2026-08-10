@@ -1,6 +1,7 @@
 package com.cappleapple.stacksnotslots.client;
 
 import com.cappleapple.stacksnotslots.StacksNotSlots;
+import com.cappleapple.stacksnotslots.api.CapacityAmount;
 import com.cappleapple.stacksnotslots.api.LogicalInventoryEntry;
 import com.cappleapple.stacksnotslots.category.CategoryDefinition;
 import com.cappleapple.stacksnotslots.category.CategoryMatcher;
@@ -387,15 +388,17 @@ public final class ContainerInventoryOverlay {
         if (ClientConfig.BROWSER_VIEW_MODE.get() == ClientConfig.BrowserViewMode.GRID) renderGrid(graphics, layout, entries, mouseX, mouseY);
         else renderList(graphics, layout, entries, mouseX, mouseY);
 
-        long used = inventory.usedCapacity();
+        CapacityAmount used = inventory.exactUsedCapacity();
         long capacity = inventory.capacity();
         graphics.drawString(minecraft.font, InventoryCountFormatter.overall(used, capacity), layout.panelX() + 5,
-                layout.capacityTextY(), used > capacity ? 0xFF7777 : 0xFFFFFF, false);
+                layout.capacityTextY(), used.compareTo(CapacityAmount.of(capacity)) > 0 ? 0xFF7777 : 0xFFFFFF, false);
         int barWidth = layout.panelWidth() - 10;
-        int filled = capacity <= 0 ? (used > 0 ? barWidth : 0) : used >= capacity ? barWidth : (int)(used * barWidth / capacity);
+        int usedComparison = used.compareTo(CapacityAmount.of(capacity));
+        int filled = capacity <= 0 ? (!used.isZero() ? barWidth : 0)
+                : usedComparison >= 0 ? barWidth : (int)(used.doubleValue() * barWidth / capacity);
         graphics.fill(layout.panelX() + 5, layout.capacityBarY(), layout.panelX() + 5 + barWidth, layout.capacityBarY() + 5, 0xFF454545);
         graphics.fill(layout.panelX() + 5, layout.capacityBarY(), layout.panelX() + 5 + filled, layout.capacityBarY() + 5,
-                used > capacity ? 0xFFE34B4B : 0xFF54B45A);
+                usedComparison > 0 ? 0xFFE34B4B : 0xFF54B45A);
         renderTextSquare(graphics, layout.direction(), arrow(dockSide), mouseX, mouseY,
                 "gui.stacksnotslots.browser_direction");
         renderSquare(graphics, layout.manage(), configuredIcon(ClientConfig.MANAGE_TABS_ICON.get()), mouseX, mouseY,
