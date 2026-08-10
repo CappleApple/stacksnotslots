@@ -48,7 +48,7 @@ Requirements are Java 21, Minecraft 1.21.1, and NeoForge 21.1.244 or newer.
 ./gradlew test build
 ```
 
-The built library is written to `build/libs/stacksnotslots-0.6.5.jar`.
+The built library is written to `build/libs/stacksnotslots-1.0.jar`.
 
 ## Related projects
 
