@@ -95,4 +95,4 @@ The built library is written to `build/libs/`.
 
 ## License
 
-Stacks Not Slots is licensed under the MIT License.
+Stacks Not Slots is licensed under [CC BY-NC-SA 4.0 with a Modpack/Server Exception](LICENSE). Modpacks and Minecraft servers, including monetized ones, may use it under the additional permission in the LICENSE.
